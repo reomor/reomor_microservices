@@ -71,3 +71,21 @@ create image from container, container runs
 ```
 docker commit f806830d7ab3 me/temp-ubuntu
 ```
+kill
+```
+docker ps -q
+docker kill $(docker ps -q)
+```
+info about size of images, containers and volumes
+```
+sudo docker system df
+```
+delete container, with -f working container too
+```
+docker rm
+docker rm -f
+```
+delete image if no containers depends on it
+```
+docker rmi
+```

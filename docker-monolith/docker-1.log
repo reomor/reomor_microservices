@@ -14,3 +14,4 @@ A container is a runtime instance of a docker image WITH state, consists of:
  - image
  - an execution environment
  - a standard set of instructions
+ 
