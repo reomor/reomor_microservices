@@ -78,7 +78,7 @@ docker kill $(docker ps -q)
 ```
 info about size of images, containers and volumes
 ```
-sudo docker system df
+docker system df
 ```
 delete container, with -f working container too
 ```
@@ -88,4 +88,51 @@ docker rm -f
 delete image if no containers depends on it
 ```
 docker rmi
+```
+
+## HW13
+
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=docker-2)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/docker-2)
+
+### description
+...
+create project docker in GCP
+install gcloud sdk locally
+```
+gcloud init
+gcloud auth application-default login
+```
+[install docker-machine](https://docs.docker.com/machine/install-machine/#install-machine-directly)
+```
+base=https://github.com/docker/machine/releases/download/v0.16.0 &&
+  curl -L $base/docker-machine-$(uname -s)-$(uname -m) >/tmp/docker-machine &&
+  sudo install /tmp/docker-machine /usr/local/bin/docker-machine
+```
+enable compute engine API (before or after machine create installation error)
+create host in GCP by docker machine 
+```
+export GOOGLE_PROJECT=docker-225016
+docker-machine create --driver google \
+--google-machine-image https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-1604-lts \
+--google-machine-type n1-standard-1 \
+--google-zone europe-west1-b \
+docker-host
+```
+docker-host is a name of machine
+check docker-host status and switch to remote docker (the command has no output)
+```
+docker-machine ls
+eval $(docker-machine env docker-host)
+```
+back to local docker
+```
+eval $(docker-machine env --unset)
+```
+isolated area, instant PID
+```
+ docker run --rm -ti tehbilly/htop
+```
+among host processes, host PID
+``` 
+ docker run --rm --pid host -ti tehbilly/htop
 ```
