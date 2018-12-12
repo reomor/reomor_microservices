@@ -71,6 +71,10 @@ create image from container, container runs
 ```
 docker commit f806830d7ab3 me/temp-ubuntu
 ```
+stop
+```
+docker container stop <u_container_id>
+```
 kill
 ```
 docker ps -q
@@ -108,7 +112,7 @@ base=https://github.com/docker/machine/releases/download/v0.16.0 &&
   curl -L $base/docker-machine-$(uname -s)-$(uname -m) >/tmp/docker-machine &&
   sudo install /tmp/docker-machine /usr/local/bin/docker-machine
 ```
-enable compute engine API (before or after machine create installation error)
+enable compute engine API (before or after machine creation error)
 create host in GCP by docker machine 
 ```
 export GOOGLE_PROJECT=docker-225016
@@ -135,4 +139,36 @@ isolated area, instant PID
 among host processes, host PID
 ``` 
  docker run --rm --pid host -ti tehbilly/htop
+```
+[docker in docker image](https://github.com/jpetazzo/dind)
+[user namespace docs](https://docs.docker.com/engine/security/userns-remap/)
+Dockerfile
+```
+FROM ubuntu:16.04
+
+RUN apt-get update
+RUN apt-get install -y mongodb-server ruby-full ruby-dev build-essential git
+RUN gem install bundler
+RUN git clone -b monolith https://github.com/express42/reddit.git
+
+COPY mongod.conf /etc/mongod.conf
+COPY db_config /reddit/db_config
+COPY start.sh /start.sh
+
+RUN cd /reddit && bundle install
+RUN chmod 0777 /start.sh
+
+CMD ["/start.sh"]
+```
+build
+```
+docker build -t reddit:latest .
+```
+gcloud rule - allow acces to port 9292
+```
+gcloud compute firewall-rules create reddit-app \
+--allow tcp:9292 \
+--target-tags=docker-machine \
+--description="Allow PUMA connections" \
+--direction=INGRESS
 ```
