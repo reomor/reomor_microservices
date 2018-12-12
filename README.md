@@ -172,3 +172,40 @@ gcloud compute firewall-rules create reddit-app \
 --description="Allow PUMA connections" \
 --direction=INGRESS
 ```
+login at Docker-Hub with Docker-Hub registration name and password
+```
+docker login
+```
+push my own image
+```
+docker tag reddit:latest rimskiy/otus-reddit:1.0
+docker push rimskiy/otus-reddit:1.0
+```
+use image from Docker-Hub
+```
+docker run --name reddit -d -p 9292:9292 rimskiy/otus-reddit:1.0
+```
+useful commands
+```
+docker logs reddit -f 
+docker exec -it reddit bash
+ - ps aux
+ - killall5 1
+docker start reddit
+docker stop reddit && docker rm reddit
+docker run --name reddit --rm -it rimskiy/otus-reddit:1.0 bash
+ - ps aux
+ - exit
+```
+additional useful commands
+```
+docker inspect rimskiy/otus-reddit:1.0
+docker inspect rimskiy/otus-reddit:1.0 -f '{{.ContainerConfig.Cmd}}'
+docker run --name reddit -d -p 9292:9292 docker inspect rimskiy/otus-reddit:1.0
+docker exec -it reddit bash
+ - mkdir /test123
+ - touch /test123/file123
+ - rmdir /opt
+ - exit
+docker diff reddit 
+```
