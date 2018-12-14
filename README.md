@@ -113,7 +113,7 @@ base=https://github.com/docker/machine/releases/download/v0.16.0 &&
   sudo install /tmp/docker-machine /usr/local/bin/docker-machine
 ```
 enable compute engine API (before or after machine creation error)
-create host in GCP by docker machine 
+create host in GCP with docker ce by docker machine 
 ```
 export GOOGLE_PROJECT=docker-225016
 docker-machine create --driver google \
@@ -208,4 +208,20 @@ docker exec -it reddit bash
  - rmdir /opt
  - exit
 docker diff reddit 
+```
+docker image via terraform
+ - create directory terraform in infra
+ - create empty main.tf
+ - then
+```
+terraform init
+```
+ - add provider
+ - describe google_compute_instance
+ - extract variables and its defaults
+ - put output variables
+ - set exact variables in terraform.tfvars (terraform.tfvars.example)
+ - apply
+```
+terraform apply
 ```
