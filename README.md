@@ -225,3 +225,4 @@ terraform init
 ```
 terraform apply
 ```
+it is possible to install docker only by terraform [link](https://collabnix.com/5-minutes-to-run-your-first-docker-container-on-google-cloud-platform-using-terraform/)
