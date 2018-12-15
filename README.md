@@ -226,3 +226,20 @@ terraform init
 terraform apply
 ```
 it is possible to install docker only by terraform [link](https://collabnix.com/5-minutes-to-run-your-first-docker-container-on-google-cloud-platform-using-terraform/)
+
+ansible
+ - add ansible.cfg
+ - add GCP dynamic inventory
+ - add credentials
+ - add playbooks
+```
+ansible-playbook playbooks/site.yml --check -vvvv
+ansible-playbook playbooks/site.yml
+```
+
+packer
+```
+cd infra
+packer validate -var-file packer/variables.json packer/packer_docker.json
+packer build -var-file packer/variables.json packer/packer_docker.json
+```
