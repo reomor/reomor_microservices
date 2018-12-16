@@ -1,0 +1,18 @@
+FROM alpine:3.8
+
+ENV APP_HOME /app
+RUN mkdir $APP_HOME
+WORKDIR $APP_HOME
+
+COPY Gemfile* $APP_HOME/
+
+RUN apk add --no-cache ruby=2.5.2-r0 ruby-dev=2.5.2-r0 build-base=0.5-r1 ruby-bundler=1.16.2-r1 \
+&& bundle install \
+&& apk del ruby-dev build-base ruby-bundler
+
+COPY . $APP_HOME
+
+ENV COMMENT_DATABASE_HOST comment_db
+ENV COMMENT_DATABASE comments
+
+CMD ["puma"]

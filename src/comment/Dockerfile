@@ -1,13 +1,16 @@
-FROM ruby:2.2
-RUN apt-get update -qq && apt-get install -y build-essential
+FROM ubuntu:16.04
+
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \ 
+ruby-full=1:2.3.0+1 ruby-dev=1:2.3.0+1 build-essential=12.1ubuntu2 \ 
+&& rm -rf /var/lib/apt/lists/* && gem install bundler --no-ri --no-rdoc
 
 ENV APP_HOME /app
 RUN mkdir $APP_HOME
 WORKDIR $APP_HOME
 
-ADD Gemfile* $APP_HOME/
+COPY Gemfile* $APP_HOME/
 RUN bundle install
-ADD . $APP_HOME
+COPY . $APP_HOME
 
 ENV COMMENT_DATABASE_HOST comment_db
 ENV COMMENT_DATABASE comments
