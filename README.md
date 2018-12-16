@@ -258,3 +258,84 @@ git clone https://github.com/hadolint/hadolint
 cd hadolint
 stack install
 ```
+create Dockerfile for each service
+post-py
+```
+FROM python:3.6.0-alpine
+
+WORKDIR /app
+ADD . /app
+
+RUN pip install -r /app/requirements.txt
+
+ENV POST_DATABASE_HOST post_db
+ENV POST_DATABASE posts
+
+CMD ["python3", "post_app.py"]
+```
+comment
+```
+FROM ruby:2.2
+RUN apt-get update -qq && apt-get install -y build-essential
+
+ENV APP_HOME /app
+RUN mkdir $APP_HOME
+WORKDIR $APP_HOME
+
+ADD Gemfile* $APP_HOME/
+RUN bundle install
+ADD . $APP_HOME
+
+ENV COMMENT_DATABASE_HOST comment_db
+ENV COMMENT_DATABASE comments
+
+CMD ["puma"]
+```
+ui
+```
+FROM ruby:2.2
+RUN apt-get update -qq && apt-get install -y build-essential
+
+ENV APP_HOME /app
+RUN mkdir $APP_HOME
+
+WORKDIR $APP_HOME
+ADD Gemfile* $APP_HOME/
+RUN bundle install
+ADD . $APP_HOME
+
+ENV POST_SERVICE_HOST post
+ENV POST_SERVICE_PORT 5000
+ENV COMMENT_SERVICE_HOST comment
+ENV COMMENT_SERVICE_PORT 9292
+
+CMD ["puma"]
+```
+get latest version fixed mongo docker image
+```
+docker pull mongo:4.1
+```
+build images
+```
+docker build -t rimskiy/post:1.0 ./post-py
+docker build -t rimskiy/comment:1.0 ./comment
+docker build -t rimskiy/ui:1.0 ./ui/
+```
+create separate network
+```
+docker network create reddit
+```
+and run containers
+```
+docker run -d --network=reddit --network-alias=post_db --network-alias=comment_db mongo:4.1
+docker run -d --network=reddit --network-alias=post rimskiy/post:1.0
+docker run -d --network=reddit --network-alias=comment rimskiy/comment:1.0
+docker run -d --network=reddit -p 9292:9292 rimskiy/ui:1.0
+```
+run with my own network aliases and ENV parameters
+```
+docker run -d --network=reddit --network-alias=p_db --network-alias=c_db mongo:4.1
+docker run -d --network=reddit --network-alias=p --env POST_DATABASE_HOST=p_db rimskiy/post:1.0
+docker run -d --network=reddit --network-alias=c --env COMMENT_DATABASE_HOST=c_db rimskiy/comment:1.0
+docker run -d --network=reddit -p 9292:9292 --env POST_SERVICE_HOST=p --env COMMENT_SERVICE_HOST=c rimskiy/ui:1.0
+```
