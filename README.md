@@ -390,6 +390,12 @@ docker run -d --network=reddit -p 9292:9292 rimskiy/ui:1.0
 ```
 improve Dockerfiles according to hadolint and alpine linux
 ```
+docker run -d --network=reddit --network-alias=post_db \
+--network-alias=comment_db -v reddit_db:/data/db mongo:4.1
+docker run -d --network=reddit --network-alias=post rimskiy/post:1.0
+docker run -d --network=reddit --network-alias=comment rimskiy/comment:3.0
+docker run -d --network=reddit -p 9292:9292 rimskiy/ui:3.0
+
 REPOSITORY          TAG                 IMAGE ID            CREATED              SIZE
 rimskiy/ui          3.0                 056b541a7863        About a minute ago   60.1MB
 rimskiy/comment     3.0                 2b93a23be758        26 minutes ago       51.9MB
@@ -398,4 +404,9 @@ rimskiy/ui          2.0                 49338ccd182e        2 hours ago         
 rimskiy/ui          1.0                 8b69e7c17d6a        2 hours ago          781MB
 rimskiy/comment     1.0                 93e3b56daabd        2 hours ago          773MB
 rimskiy/post        1.0                 3e6d5c08b298        2 hours ago          102MB
+```
+building...
+```
+docker build -t rimskiy/comment:3.0 -f ./comment/Dockerfile.1 ./comment/
+docker build -t rimskiy/ui:3.0 -f ./ui/Dockerfile.1 ./ui/
 ```
