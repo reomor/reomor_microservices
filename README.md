@@ -339,3 +339,52 @@ docker run -d --network=reddit --network-alias=p --env POST_DATABASE_HOST=p_db r
 docker run -d --network=reddit --network-alias=c --env COMMENT_DATABASE_HOST=c_db rimskiy/comment:1.0
 docker run -d --network=reddit -p 9292:9292 --env POST_SERVICE_HOST=p --env COMMENT_SERVICE_HOST=c rimskiy/ui:1.0
 ```
+too much space
+```
+reomor@debian:~/git/reomor_microservices/src$ docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
+rimskiy/ui          1.0                 8b69e7c17d6a        21 minutes ago      781MB
+rimskiy/comment     1.0                 93e3b56daabd        34 minutes ago      773MB
+rimskiy/post        1.0                 3e6d5c08b298        39 minutes ago      102MB
+mongo               4.1                 d354ee440d75        8 days ago          391MB
+ruby                2.2                 6c8e6f9667b2        7 months ago        715MB
+python              3.6.0-alpine        cb178ebbf0f2        21 months ago       88.6MB
+```
+improve Dockerfile for ui
+```
+FROM ubuntu:16.04
+RUN apt-get update \
+    && apt-get install -y ruby-full ruby-dev build-essential \
+    && gem install bundler --no-ri --no-rdoc
+
+ENV APP_HOME /app
+RUN mkdir $APP_HOME
+
+WORKDIR $APP_HOME
+ADD Gemfile* $APP_HOME/
+RUN bundle install
+ADD . $APP_HOME
+
+ENV POST_SERVICE_HOST post
+ENV POST_SERVICE_PORT 5000
+ENV COMMENT_SERVICE_HOST comment
+ENV COMMENT_SERVICE_PORT 9292
+
+CMD ["puma"]
+```
+add volume
+```
+docker volume create reddit_db
+```
+kill all containers
+```
+docker kill $(docker ps -q)
+```
+run new containers (db with volume)
+```
+docker run -d --network=reddit --network-alias=post_db \
+--network-alias=comment_db -v reddit_db:/data/db mongo:4.1
+docker run -d --network=reddit --network-alias=post rimskiy/post:1.0
+docker run -d --network=reddit --network-alias=comment rimskiy/comment:1.0
+docker run -d --network=reddit -p 9292:9292 rimskiy/ui:1.0
+```
