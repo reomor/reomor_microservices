@@ -243,3 +243,18 @@ cd infra
 packer validate -var-file packer/variables.json packer/packer_docker.json
 packer build -var-file packer/variables.json packer/packer_docker.json
 ```
+
+
+## HW14
+
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=docker-33)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/docker-3)
+
+### description
+
+install Haskell stack
+```
+curl -sSL https://get.haskellstack.org/ | sh
+git clone https://github.com/hadolint/hadolint
+cd hadolint
+stack install
+```
