@@ -511,3 +511,56 @@ sudo iptables -nL -t nat
 sudo iptables -nL -t nat -v
 ps ax | grep docker-proxy
 ```
+
+Docker compose
+```
+pip install docker-compose
+```
+docker-compose.yml
+```
+version: '3.3'
+services:
+  post_db:
+    image: mongo:3.2
+    volumes:
+      - post_db:/data/db
+    networks:
+      - reddit
+  ui:
+    build: ./ui
+    image: ${USERNAME}/ui:1.0
+    ports:
+      - 9292:9292/tcp
+    networks:
+      - reddit
+  post:
+    build: ./post-py
+    image: ${USERNAME}/post:1.0
+    networks:
+      - reddit
+  comment:
+    build: ./comment
+    image: ${USERNAME}/comment:1.0
+    networks:
+      - reddit
+
+volumes:
+  post_db:
+
+networks:
+  reddit:
+```
+run
+```
+docker kill $(docker ps -q)
+export USERNAME=rimskiy
+# in src/
+docker-compose up -d
+docker-compose ps
+    Name                  Command             State           Ports
+----------------------------------------------------------------------------
+src_comment_1   puma                          Up
+src_post_1      python3 post_app.py           Up
+src_post_db_1   docker-entrypoint.sh mongod   Up      27017/tcp
+src_ui_1        puma                          Up      0.0.0.0:9292->9292/tcp
+```
