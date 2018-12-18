@@ -8,3 +8,5 @@ variables.json
 .vscode
 *.log
 credentials
+.env
+

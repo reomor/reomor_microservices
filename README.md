@@ -553,9 +553,9 @@ networks:
 run
 ```
 docker kill $(docker ps -q)
-export USERNAME=rimskiy
+export USERNAME=rimskiy (unset USERNAME)
 # in src/
-docker-compose up -d
+docker-compose up -d (docker-compose stop)
 docker-compose ps
     Name                  Command             State           Ports
 ----------------------------------------------------------------------------
