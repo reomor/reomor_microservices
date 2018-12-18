@@ -410,3 +410,39 @@ building...
 docker build -t rimskiy/comment:3.0 -f ./comment/Dockerfile.1 ./comment/
 docker build -t rimskiy/ui:3.0 -f ./ui/Dockerfile.1 ./ui/
 ```
+
+## HW15
+
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=docker-4)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/docker-4)
+
+### description
+Docker network (none, host, bridge) | Docker compose
+```
+docker run -ti --rm --network none joffotron/docker-net-tools -c ifconfig
+docker run -ti --rm --network host joffotron/docker-net-tools -c ifconfig
+docker-machine ssh docker-host ifconfig
+```
+if run multiple times
+```
+docker run --network host -d nginx
+```
+docker ps whows only one container and doesn't run new, probably because port is hold
+showing current net-namespaces
+```
+docker-machine ssh docker-host
+sudo ln -s /var/run/docker/netns /var/run/
+```
+| net-namespace | container                  | command        | result                |
+|---------------|----------------------------|----------------|-----------------------|
+| none          | joffotron/docker-net-tools | --network none | one new net-namespace |
+| host          | joffotron/docker-net-tools | --netowrk host | no new net-namespaces |
+```
+sudo ip netns exec a753779d74fc ifconfig
+lo        Link encap:Local Loopback  
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          UP LOOPBACK RUNNING  MTU:65536  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+```
