@@ -488,3 +488,26 @@ it's possible to connect only one network during creation
 docker network connect front_net post
 docker network connect front_net comment
 ```
+install bridge utils
+```
+docker-machine ssh docker-host
+sudo apt-get update && sudo apt-get install bridge-utils
+docker network ls
+ifconfig | grep br
+brctl show br-f7cde0dcdab6
+docker-user@docker-host:~$ brctl show br-f7cde0dcdab6
+bridge name	      bridge id		      STP enabled	  interfaces
+br-f7cde0dcdab6		8000.02420e97c9ef	no		        veth82ad0ba
+							                                    vethdd441c3
+docker-user@docker-host:~$ brctl show br-71600deee650
+bridge name	      bridge id		      STP enabled	  interfaces
+br-71600deee650		8000.0242d76f81f3	no		        vetha3e7db3
+							                                    vethd78468a
+
+```
+POSTROUTING rules for containers
+```
+sudo iptables -nL -t nat
+sudo iptables -nL -t nat -v
+ps ax | grep docker-proxy
+```
