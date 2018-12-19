@@ -564,3 +564,13 @@ src_post_1      python3 post_app.py           Up
 src_post_db_1   docker-entrypoint.sh mongod   Up      27017/tcp
 src_ui_1        puma                          Up      0.0.0.0:9292->9292/tcp
 ```
+
+prefix `src` is base on:
+ - COMPOSE_PROJECT_NAME environment variable
+ - defaults to the basename of the project directory
+
+run with multiple compose files (order matters)
+```
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d
+```
