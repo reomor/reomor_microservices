@@ -247,7 +247,7 @@ packer build -var-file packer/variables.json packer/packer_docker.json
 
 ## HW14
 
-[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=docker-33)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/docker-3)
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=docker-3)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/docker-3)
 
 ### description
 
@@ -574,3 +574,10 @@ run with multiple compose files (order matters)
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d
 ```
+
+## HW16
+
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=gitlab-ci-1)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/gitlab-ci-1)
+
+### description
+Install Gitlab CI
