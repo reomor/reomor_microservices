@@ -1,0 +1,15 @@
+---
+- name: Run image from hub
+  hosts: all
+  become: true
+  tasks:
+
+    - name: run container
+      docker_container:
+        name: reddit-app
+        image: rimskiy/otus-reddit:1.0
+        detach: yes
+        network_mode: host
+        ports:
+          - "9292:9292"
+        state: started

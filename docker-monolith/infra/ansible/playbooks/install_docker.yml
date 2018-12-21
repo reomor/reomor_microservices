@@ -1,0 +1,37 @@
+---
+- name: Install Docker CE
+  hosts: all
+  become: true
+  tasks:
+
+    - name: Install packages for allowing HTTPS and Python APT
+      apt:
+        name: ['apt-transport-https', 'ca-certificates', 'curl', 'software-properties-common', 'python-apt', 'python-pip']
+        state: present
+  
+    - name: Add Docker’s official GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+    
+    - name: Set up the stable repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu xenial stable"
+        state: present
+    
+    - name: Install docker-py for runnings
+      pip:
+        name: docker-py
+
+    - name: Install the latest version of Docker CE
+      apt:
+        name: docker-ce
+        state: present
+    
+    - name: Enable Docker
+      systemd: name=docker enabled=yes
+
+  handlers:
+    - name: Restart Docker
+      systemd: name=docker state=restarted
+  
