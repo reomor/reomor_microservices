@@ -581,3 +581,72 @@ docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d
 
 ### description
 Install Gitlab CI
+[Official documentation](https://docs.gitlab.com/ce/install/requirements.html)
+```
+gcloud compute --project=docker-225016 firewall-rules create default-allow-http --direction=INGRESS --priority=1000 --network=default --action=ALLOW --rules=tcp:80 --source-ranges=0.0.0.0/0 --target-tags=http-server
+
+gcloud compute --project=docker-225016 firewall-rules create default-allow-https --direction=INGRESS --priority=1000 --network=default --action=ALLOW --rules=tcp:443 --source-ranges=0.0.0.0/0 --target-tags=https-server
+
+gcloud compute instances create gitlab-ci \
+  --project=docker-225016 \
+  --zone=europe-west4-a \
+  --machine-type=n1-standard-1 \
+  --boot-disk-size=100GB \
+  --image-family ubuntu-1604-lts \
+  --image-project=ubuntu-os-cloud \
+  --tags=http-server,https-server,gitlab-ci-server \
+  --restart-on-failure
+```
+
+or
+[docker-machine google](https://docs.docker.com/machine/drivers/gce/)
+
+```
+export GOOGLE_PROJECT=docker-225016
+
+docker-machine create --driver google \
+--google-machine-image https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-1604-lts \
+--google-machine-type n1-standard-1 \
+--google-zone europe-west1-b \
+--google-tags http-server,https-server,gitlab-ci-server \
+gitlab-ci
+
+eval $(docker-machine env gitlab-ci)
+eval $(docker-machine env --unset)
+docker-machine stop gitlab-ci
+```
+docke-compose.yml prepare
+```
+sudo mkdir -p /srv/gitlab/config /srv/gitlab/data /srv/gitlab/log
+cd /srv/gitlab/
+touch docker-compose.yml
+sudo apt-get install docker-compose
+```
+docker-compose.yml
+```
+web:
+  image: 'gitlab/gitlab-ce:latest'
+  restart: always
+  hostname: 'gitlab.example.com'
+  environment:
+    GITLAB_OMNIBUS_CONFIG: |
+      external_url 'http://<YOUR-VM-IP>'
+  ports:
+    - '80:80'
+    - '443:443'
+    - '2222:22'
+  volumes:
+    - '/srv/gitlab/config:/etc/gitlab'
+    - '/srv/gitlab/logs:/var/log/gitlab'
+    - '/srv/gitlab/data:/var/opt/gitlab'
+```
+create image
+```
+<YOUR-VM-IP> - is external VM IP in GCP
+cd /srv/gitlab
+docker-compose up -d
+```
+[Gitlab CI omnibus installation](https://docs.gitlab.com/omnibus/docker/README.html#install-gitlab-using-docker-compose)
+```
+http://<YOUR-VM-IP> - Gitlab CI ui
+```
