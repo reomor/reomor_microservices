@@ -243,3 +243,170 @@ cd infra
 packer validate -var-file packer/variables.json packer/packer_docker.json
 packer build -var-file packer/variables.json packer/packer_docker.json
 ```
+
+
+## HW14
+
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=docker-33)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/docker-3)
+
+### description
+
+install Haskell stack
+```
+curl -sSL https://get.haskellstack.org/ | sh
+git clone https://github.com/hadolint/hadolint
+cd hadolint
+stack install
+```
+create Dockerfile for each service
+post-py
+```
+FROM python:3.6.0-alpine
+
+WORKDIR /app
+ADD . /app
+
+RUN pip install -r /app/requirements.txt
+
+ENV POST_DATABASE_HOST post_db
+ENV POST_DATABASE posts
+
+CMD ["python3", "post_app.py"]
+```
+comment
+```
+FROM ruby:2.2
+RUN apt-get update -qq && apt-get install -y build-essential
+
+ENV APP_HOME /app
+RUN mkdir $APP_HOME
+WORKDIR $APP_HOME
+
+ADD Gemfile* $APP_HOME/
+RUN bundle install
+ADD . $APP_HOME
+
+ENV COMMENT_DATABASE_HOST comment_db
+ENV COMMENT_DATABASE comments
+
+CMD ["puma"]
+```
+ui
+```
+FROM ruby:2.2
+RUN apt-get update -qq && apt-get install -y build-essential
+
+ENV APP_HOME /app
+RUN mkdir $APP_HOME
+
+WORKDIR $APP_HOME
+ADD Gemfile* $APP_HOME/
+RUN bundle install
+ADD . $APP_HOME
+
+ENV POST_SERVICE_HOST post
+ENV POST_SERVICE_PORT 5000
+ENV COMMENT_SERVICE_HOST comment
+ENV COMMENT_SERVICE_PORT 9292
+
+CMD ["puma"]
+```
+get latest version fixed mongo docker image
+```
+docker pull mongo:4.1
+```
+build images
+```
+docker build -t rimskiy/post:1.0 ./post-py
+docker build -t rimskiy/comment:1.0 ./comment
+docker build -t rimskiy/ui:1.0 ./ui/
+```
+create separate network
+```
+docker network create reddit
+```
+and run containers
+```
+docker run -d --network=reddit --network-alias=post_db --network-alias=comment_db mongo:4.1
+docker run -d --network=reddit --network-alias=post rimskiy/post:1.0
+docker run -d --network=reddit --network-alias=comment rimskiy/comment:1.0
+docker run -d --network=reddit -p 9292:9292 rimskiy/ui:1.0
+```
+run with my own network aliases and ENV parameters
+```
+docker run -d --network=reddit --network-alias=p_db --network-alias=c_db mongo:4.1
+docker run -d --network=reddit --network-alias=p --env POST_DATABASE_HOST=p_db rimskiy/post:1.0
+docker run -d --network=reddit --network-alias=c --env COMMENT_DATABASE_HOST=c_db rimskiy/comment:1.0
+docker run -d --network=reddit -p 9292:9292 --env POST_SERVICE_HOST=p --env COMMENT_SERVICE_HOST=c rimskiy/ui:1.0
+```
+too much space
+```
+reomor@debian:~/git/reomor_microservices/src$ docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
+rimskiy/ui          1.0                 8b69e7c17d6a        21 minutes ago      781MB
+rimskiy/comment     1.0                 93e3b56daabd        34 minutes ago      773MB
+rimskiy/post        1.0                 3e6d5c08b298        39 minutes ago      102MB
+mongo               4.1                 d354ee440d75        8 days ago          391MB
+ruby                2.2                 6c8e6f9667b2        7 months ago        715MB
+python              3.6.0-alpine        cb178ebbf0f2        21 months ago       88.6MB
+```
+improve Dockerfile for ui
+```
+FROM ubuntu:16.04
+RUN apt-get update \
+    && apt-get install -y ruby-full ruby-dev build-essential \
+    && gem install bundler --no-ri --no-rdoc
+
+ENV APP_HOME /app
+RUN mkdir $APP_HOME
+
+WORKDIR $APP_HOME
+ADD Gemfile* $APP_HOME/
+RUN bundle install
+ADD . $APP_HOME
+
+ENV POST_SERVICE_HOST post
+ENV POST_SERVICE_PORT 5000
+ENV COMMENT_SERVICE_HOST comment
+ENV COMMENT_SERVICE_PORT 9292
+
+CMD ["puma"]
+```
+add volume
+```
+docker volume create reddit_db
+```
+kill all containers
+```
+docker kill $(docker ps -q)
+```
+run new containers (db with volume)
+```
+docker run -d --network=reddit --network-alias=post_db \
+--network-alias=comment_db -v reddit_db:/data/db mongo:4.1
+docker run -d --network=reddit --network-alias=post rimskiy/post:1.0
+docker run -d --network=reddit --network-alias=comment rimskiy/comment:1.0
+docker run -d --network=reddit -p 9292:9292 rimskiy/ui:1.0
+```
+improve Dockerfiles according to hadolint and alpine linux
+```
+docker run -d --network=reddit --network-alias=post_db \
+--network-alias=comment_db -v reddit_db:/data/db mongo:4.1
+docker run -d --network=reddit --network-alias=post rimskiy/post:1.0
+docker run -d --network=reddit --network-alias=comment rimskiy/comment:3.0
+docker run -d --network=reddit -p 9292:9292 rimskiy/ui:3.0
+
+REPOSITORY          TAG                 IMAGE ID            CREATED              SIZE
+rimskiy/ui          3.0                 056b541a7863        About a minute ago   60.1MB
+rimskiy/comment     3.0                 2b93a23be758        26 minutes ago       51.9MB
+rimskiy/comment     2.0                 73bed8c8b485        40 minutes ago       359MB
+rimskiy/ui          2.0                 49338ccd182e        2 hours ago          453MB
+rimskiy/ui          1.0                 8b69e7c17d6a        2 hours ago          781MB
+rimskiy/comment     1.0                 93e3b56daabd        2 hours ago          773MB
+rimskiy/post        1.0                 3e6d5c08b298        2 hours ago          102MB
+```
+building...
+```
+docker build -t rimskiy/comment:3.0 -f ./comment/Dockerfile.1 ./comment/
+docker build -t rimskiy/ui:3.0 -f ./ui/Dockerfile.1 ./ui/
+```
