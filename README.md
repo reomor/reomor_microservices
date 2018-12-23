@@ -767,6 +767,8 @@ deploy_job:
 ```
 
 Gitlab runner installation
+
+[runner registration](https://docs.gitlab.com/runner/register/index.html)
 ```
 touch install_and_register_gl-runners.sh
 chmod +x install_and_register_gl-runners.sh
@@ -821,3 +823,9 @@ sudo ./install_and_register_gl-runners.sh -u http://35.205.189.16/ -t t.o.k.e.n 
 ```
 
 [Slack channel notifications here](https://devops-team-otus.slack.com/messages/CDBMV15RU)
+
+## HW17
+
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=gitlab-ci-2)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/gitlab-ci-2)
+
+### description
