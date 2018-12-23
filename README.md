@@ -684,3 +684,46 @@ deploy_job:
   script:
     - echo 'Deploy'
 ```
+get token at Settings - CI/CD - Runners
+install gitlab-runner
+```
+docker-machine ssh gitlab-ci
+sudo docker run -d --name gitlab-runner --restart always \
+  -v /srv/gitlab-runner/config:/etc/gitlab-runner \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  gitlab/gitlab-runner:latest
+```
+register runner in gitlab
+```
+docker exec -it gitlab-runner gitlab-runner register
+ - URL
+ - token
+ - description (my-runner)
+ - tags (linux,xenial,ubuntu,docker)
+ - executor (docker)
+ - docker default image (alpine:latest)
+
+Settings - CI/CD - Runners - my-runner
+```
+in my case i was needed to activate `Indicates whether this runner can pick jobs without tags` manualy
+then VM IP in GCP changed to another so on VM and build failed because of it
+fix
+```
+docker-machine ssh gitlab-ci
+sudo nano /srv/gitlab/config/gitlab.rb
+# uncomment and set
+external_url 'http://new-VM-ip/'
+```
+then
+```
+sudo docker exec -it gitlab_wev_1 bash
+gitlab-ctl reconfigure
+gitlab-ctl restart
+```
+then download reddit code
+```
+git clone https://github.com/express42/reddit.git && rm -rf ./reddit/.git
+git add reddit/
+git commit -m "add reddit app"
+git push gitlab gitlab-ci-1
+```
