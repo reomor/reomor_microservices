@@ -615,7 +615,7 @@ eval $(docker-machine env gitlab-ci)
 eval $(docker-machine env --unset)
 docker-machine stop gitlab-ci
 ```
-docke-compose.yml prepare
+docker-compose.yml prepare
 ```
 sudo mkdir -p /srv/gitlab/config /srv/gitlab/data /srv/gitlab/log
 cd /srv/gitlab/
@@ -726,4 +726,42 @@ git clone https://github.com/express42/reddit.git && rm -rf ./reddit/.git
 git add reddit/
 git commit -m "add reddit app"
 git push gitlab gitlab-ci-1
+```
+pipeline changes
+```
+image: ruby:2.4.2
+
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  DATABASE_URL: 'mongodb://mongo/user_posts'
+
+before_script:
+  - cd reddit
+  - bundle install
+
+build_job:
+  stage: build
+  script:
+    - echo 'Building'
+
+test_unit_job:
+  stage: test
+  services:
+    - mongo:latest
+  script:
+    - ruby simpletest.rb
+
+test_integration_job:
+  stage: test
+  script:
+    - echo 'Testing 2'
+
+deploy_job:
+  stage: deploy
+  script:
+    - echo 'Deploy'
 ```
