@@ -650,3 +650,37 @@ docker-compose up -d
 ```
 http://<YOUR-VM-IP> - Gitlab CI ui
 ```
+in Gitlab add user, create Group, Project
+in repository
+```
+git checkout -b gitlab-ci-1
+git remote add gitlab http://35.241.247.103/homework/example.git
+git push gitlab gitlab-ci-1
+```
+create .gitlab-ci.yml in root
+```
+stages:
+  - build
+  - test
+  - deploy
+
+build_job:
+  stage: build
+  script:
+    - echo 'Building'
+
+test_unit_job:
+  stage: test
+  script:
+    - echo 'Testing 1'
+
+test_integration_job:
+  stage: test
+  script:
+    - echo 'Testing 2'
+
+deploy_job:
+  stage: deploy
+  script:
+    - echo 'Deploy'
+```
