@@ -410,3 +410,167 @@ building...
 docker build -t rimskiy/comment:3.0 -f ./comment/Dockerfile.1 ./comment/
 docker build -t rimskiy/ui:3.0 -f ./ui/Dockerfile.1 ./ui/
 ```
+
+## HW15
+
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=docker-4)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/docker-4)
+
+### description
+Docker network (none, host, bridge) | Docker compose
+```
+docker run -ti --rm --network none joffotron/docker-net-tools -c ifconfig
+docker run -ti --rm --network host joffotron/docker-net-tools -c ifconfig
+docker-machine ssh docker-host ifconfig
+```
+if run multiple times
+```
+docker run --network host -d nginx
+```
+docker ps whows only one container and doesn't run new, probably because port is hold
+showing current net-namespaces
+```
+docker-machine ssh docker-host
+sudo ln -s /var/run/docker/netns /var/run/
+```
+| net-namespace | container                  | command        | result                |
+|---------------|----------------------------|----------------|-----------------------|
+| none          | joffotron/docker-net-tools | --network none | one new net-namespace |
+| host          | joffotron/docker-net-tools | --netowrk host | no new net-namespaces |
+```
+sudo ip netns exec a753779d74fc ifconfig
+lo        Link encap:Local Loopback  
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          UP LOOPBACK RUNNING  MTU:65536  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+```
+create bridge network
+```
+docker network create reddit --driver bridge
+# or the same because it's default driver
+docker network create reddit
+```
+run project only with reddit network
+```
+docker run -d --network=reddit mongo:4.1
+docker run -d --network=reddit rimskiy/post:1.0
+docker run -d --network=reddit rimskiy/comment:3.0
+docker run -d --network=reddit -p 9292:9292 rimskiy/ui:3.0
+```
+error, because services are not registered in DNS docker and links each other with env-params
+```
+docker kill $(docker ps -q)
+docker run -d --network=reddit --network-alias=post_db --network-alias=comment_db mongo:4.1
+docker run -d --network=reddit --network-alias=post rimskiy/post:1.0
+docker run -d --network=reddit --network-alias=comment rimskiy/comment:3.0
+docker run -d --network=reddit -p 9292:9292 rimskiy/ui:3.0
+```
+separate docker bridge-networks
+```
+docker kill $(docker ps -q)
+docker network create back_net --subnet=10.0.2.0/24
+docker network create front_net --subnet=10.0.1.0/24
+docker network ls
+```
+run with different networks
+```
+docker run -d --network=back_net --network-alias=post_db --network-alias=comment_db --name mongo_db mongo:4.1
+docker run -d --network=back_net --name post rimskiy/post:1.0
+docker run -d --network=back_net --name comment rimskiy/comment:3.0
+docker run -d --network=front_net -p 9292:9292 --name ui rimskiy/ui:3.0
+```
+error, put post and comment in both networks manually
+it's possible to connect only one network during creation
+```
+# docker network connect <network> <container>
+docker network connect front_net post
+docker network connect front_net comment
+```
+install bridge utils
+```
+docker-machine ssh docker-host
+sudo apt-get update && sudo apt-get install bridge-utils
+docker network ls
+ifconfig | grep br
+brctl show br-f7cde0dcdab6
+docker-user@docker-host:~$ brctl show br-f7cde0dcdab6
+bridge name	      bridge id		      STP enabled	  interfaces
+br-f7cde0dcdab6		8000.02420e97c9ef	no		        veth82ad0ba
+							                                    vethdd441c3
+docker-user@docker-host:~$ brctl show br-71600deee650
+bridge name	      bridge id		      STP enabled	  interfaces
+br-71600deee650		8000.0242d76f81f3	no		        vetha3e7db3
+							                                    vethd78468a
+
+```
+POSTROUTING rules for containers
+```
+sudo iptables -nL -t nat
+sudo iptables -nL -t nat -v
+ps ax | grep docker-proxy
+```
+
+Docker compose
+```
+pip install docker-compose
+```
+docker-compose.yml
+```
+version: '3.3'
+services:
+  post_db:
+    image: mongo:3.2
+    volumes:
+      - post_db:/data/db
+    networks:
+      - reddit
+  ui:
+    build: ./ui
+    image: ${USERNAME}/ui:1.0
+    ports:
+      - 9292:9292/tcp
+    networks:
+      - reddit
+  post:
+    build: ./post-py
+    image: ${USERNAME}/post:1.0
+    networks:
+      - reddit
+  comment:
+    build: ./comment
+    image: ${USERNAME}/comment:1.0
+    networks:
+      - reddit
+
+volumes:
+  post_db:
+
+networks:
+  reddit:
+```
+run
+```
+docker kill $(docker ps -q)
+export USERNAME=rimskiy (unset USERNAME)
+# in src/
+docker-compose up -d (docker-compose stop)
+docker-compose ps
+    Name                  Command             State           Ports
+----------------------------------------------------------------------------
+src_comment_1   puma                          Up
+src_post_1      python3 post_app.py           Up
+src_post_db_1   docker-entrypoint.sh mongod   Up      27017/tcp
+src_ui_1        puma                          Up      0.0.0.0:9292->9292/tcp
+```
+
+prefix `src` is base on:
+ - COMPOSE_PROJECT_NAME environment variable
+ - defaults to the basename of the project directory
+
+run with multiple compose files (order matters)
+```
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d
+```
