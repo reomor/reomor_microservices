@@ -247,7 +247,7 @@ packer build -var-file packer/variables.json packer/packer_docker.json
 
 ## HW14
 
-[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=docker-33)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/docker-3)
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=docker-3)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/docker-3)
 
 ### description
 
@@ -574,3 +574,250 @@ run with multiple compose files (order matters)
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d
 ```
+
+## HW16
+
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=gitlab-ci-1)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/gitlab-ci-1)
+
+### description
+Install Gitlab CI
+[Official documentation](https://docs.gitlab.com/ce/install/requirements.html)
+```
+gcloud compute --project=docker-225016 firewall-rules create default-allow-http --direction=INGRESS --priority=1000 --network=default --action=ALLOW --rules=tcp:80 --source-ranges=0.0.0.0/0 --target-tags=http-server
+
+gcloud compute --project=docker-225016 firewall-rules create default-allow-https --direction=INGRESS --priority=1000 --network=default --action=ALLOW --rules=tcp:443 --source-ranges=0.0.0.0/0 --target-tags=https-server
+
+gcloud compute instances create gitlab-ci \
+  --project=docker-225016 \
+  --zone=europe-west4-a \
+  --machine-type=n1-standard-1 \
+  --boot-disk-size=100GB \
+  --image-family ubuntu-1604-lts \
+  --image-project=ubuntu-os-cloud \
+  --tags=http-server,https-server,gitlab-ci-server \
+  --restart-on-failure
+```
+
+or
+[docker-machine google](https://docs.docker.com/machine/drivers/gce/)
+
+```
+export GOOGLE_PROJECT=docker-225016
+
+docker-machine create --driver google \
+--google-machine-image https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-1604-lts \
+--google-machine-type n1-standard-1 \
+--google-zone europe-west1-b \
+--google-tags http-server,https-server,gitlab-ci-server \
+gitlab-ci
+
+eval $(docker-machine env gitlab-ci)
+eval $(docker-machine env --unset)
+docker-machine stop gitlab-ci
+```
+docker-compose.yml prepare
+```
+sudo mkdir -p /srv/gitlab/config /srv/gitlab/data /srv/gitlab/log
+cd /srv/gitlab/
+touch docker-compose.yml
+sudo apt-get install docker-compose
+```
+docker-compose.yml
+```
+web:
+  image: 'gitlab/gitlab-ce:latest'
+  restart: always
+  hostname: 'gitlab.example.com'
+  environment:
+    GITLAB_OMNIBUS_CONFIG: |
+      external_url 'http://<YOUR-VM-IP>'
+  ports:
+    - '80:80'
+    - '443:443'
+    - '2222:22'
+  volumes:
+    - '/srv/gitlab/config:/etc/gitlab'
+    - '/srv/gitlab/logs:/var/log/gitlab'
+    - '/srv/gitlab/data:/var/opt/gitlab'
+```
+create image
+```
+<YOUR-VM-IP> - is external VM IP in GCP
+cd /srv/gitlab
+docker-compose up -d
+```
+[Gitlab CI omnibus installation](https://docs.gitlab.com/omnibus/docker/README.html#install-gitlab-using-docker-compose)
+```
+http://<YOUR-VM-IP> - Gitlab CI ui
+```
+in Gitlab add user, create Group, Project
+in repository
+```
+git checkout -b gitlab-ci-1
+git remote add gitlab http://35.241.247.103/homework/example.git
+git push gitlab gitlab-ci-1
+```
+create .gitlab-ci.yml in root
+```
+stages:
+  - build
+  - test
+  - deploy
+
+build_job:
+  stage: build
+  script:
+    - echo 'Building'
+
+test_unit_job:
+  stage: test
+  script:
+    - echo 'Testing 1'
+
+test_integration_job:
+  stage: test
+  script:
+    - echo 'Testing 2'
+
+deploy_job:
+  stage: deploy
+  script:
+    - echo 'Deploy'
+```
+get token at Settings - CI/CD - Runners
+install gitlab-runner
+```
+docker-machine ssh gitlab-ci
+sudo docker run -d --name gitlab-runner --restart always \
+  -v /srv/gitlab-runner/config:/etc/gitlab-runner \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  gitlab/gitlab-runner:latest
+```
+register runner in gitlab
+```
+docker exec -it gitlab-runner gitlab-runner register
+ - URL
+ - token
+ - description (my-runner)
+ - tags (linux,xenial,ubuntu,docker)
+ - executor (docker)
+ - docker default image (alpine:latest)
+
+Settings - CI/CD - Runners - my-runner
+```
+in my case i was needed to activate `Indicates whether this runner can pick jobs without tags` manualy
+then VM IP in GCP changed to another so on VM and build failed because of it
+fix
+```
+docker-machine ssh gitlab-ci
+sudo nano /srv/gitlab/config/gitlab.rb
+# uncomment and set
+external_url 'http://new-VM-ip/'
+```
+then
+```
+sudo docker exec -it gitlab_wev_1 bash
+gitlab-ctl reconfigure
+gitlab-ctl restart
+```
+then download reddit code
+```
+git clone https://github.com/express42/reddit.git && rm -rf ./reddit/.git
+git add reddit/
+git commit -m "add reddit app"
+git push gitlab gitlab-ci-1
+```
+pipeline changes
+```
+image: ruby:2.4.2
+
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  DATABASE_URL: 'mongodb://mongo/user_posts'
+
+before_script:
+  - cd reddit
+  - bundle install
+
+build_job:
+  stage: build
+  script:
+    - echo 'Building'
+
+test_unit_job:
+  stage: test
+  services:
+    - mongo:latest
+  script:
+    - ruby simpletest.rb
+
+test_integration_job:
+  stage: test
+  script:
+    - echo 'Testing 2'
+
+deploy_job:
+  stage: deploy
+  script:
+    - echo 'Deploy'
+```
+
+Gitlab runner installation
+```
+touch install_and_register_gl-runners.sh
+chmod +x install_and_register_gl-runners.sh
+```
+file contain
+```sh
+#!/bin/bash
+
+EXTERNAL_URL=
+TOKEN=
+COUNT=1
+while getopts ":u:t:c:" opt; do
+  case $opt in
+    u) EXTERNAL_URL="$OPTARG"
+    ;;
+    t) TOKEN="$OPTARG"
+    ;;
+    c) COUNT="$OPTARG"
+    ;;
+    \?) echo "Invalid option -$OPTARG" >&2
+    ;;
+  esac
+done
+
+printf "External Gitlab url is %s\n" "$EXTERNAL_URL"
+printf "TOKEN is %s\n" "$TOKEN"
+printf "COUNT is %s\n" "$COUNT"
+
+for i in `seq 1 $COUNT`; do
+            #echo gitlab-runner-$i
+            docker run -d --name gitlab-runner-$i --restart always \
+            -v /srv/gitlab-runner/config:/etc/gitlab-runner \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            gitlab/gitlab-runner:latest
+
+            docker exec -it gitlab-runner gitlab-runner register \
+            --non-interactive \
+            --url "$EXTERNAL_URL" \
+            --registration-token "$TOKEN" \
+            --executor "docker" \
+            --docker-image alpine:3 \
+            --description "docker-runner" \
+            --tag-list "docker" \
+            --run-untagged \
+            --locked="false"
+        done
+```
+then
+```
+docker-machine scp install_and_register_gl-runners.sh gitlab-ci:/tmp
+sudo ./install_and_register_gl-runners.sh -u http://35.205.189.16/ -t t.o.k.e.n -c 4
+```
+
+[Slack channel notifications here](https://devops-team-otus.slack.com/messages/CDBMV15RU)
