@@ -829,3 +829,8 @@ sudo ./install_and_register_gl-runners.sh -u http://35.205.189.16/ -t t.o.k.e.n 
 [![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=gitlab-ci-2)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/gitlab-ci-2)
 
 ### description
+
+create new project, add to remote repo
+```
+git remote add gitlab2 http://35.205.189.16/homework/example2.git
+```
