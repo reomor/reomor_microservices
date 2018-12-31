@@ -1,5 +1,5 @@
-resource "google_compute_firewall" "gitlab_firewall_puma" {
-  name    = "allow-gitlab-puma-default"
+resource "google_compute_firewall" "firewall_puma" {
+  name    = "allow-puma-default"
   network = "default"
 
   allow {
@@ -8,5 +8,5 @@ resource "google_compute_firewall" "gitlab_firewall_puma" {
   }
 
   source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["gitlab-branch"]
+  target_tags   = ["puma-default"]
 }

@@ -891,6 +891,92 @@ adding credentials from GCP
 ```
 cat gitlab-ci/infra/credentials/project.json | base64 -w0
 ```
-to Gitlab -> Settings -> CI/CD -> Variables (SERVICEACCOUNT)
 
-https://www.terraform.io/docs/configuration/environment-variables.html
+[environment variables](https://www.terraform.io/docs/configuration/environment-variables.html)
+
+add Gitlab -> Settings -> CI/CD -> Variables
+- SERVICEACCOUNT
+- TF_VAR_private_key_path
+- TF_VAR_public_key_path
+
+before creating infrastructure must exist:
+- rule
+```
+resource "google_compute_firewall" "firewall_puma" {
+  name    = "allow-puma-default"
+  network = "default"
+
+  allow {
+    protocol = "tcp"
+    ports    = ["9292"]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+  target_tags   = ["puma-default"]
+}
+```
+- google storage bucket
+```
+resource "google_storage_bucket" "gitlab_state_bucket" {
+  
+  name = "gitlab-terraform-state-storage-bucket"
+
+  versioning {
+    enabled = true
+  }
+
+  force_destroy = true
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "google_storage_bucket_acl" "state_storage_bucket_acl" {
+  bucket         = "${google_storage_bucket.gitlab_state_bucket.name}"
+  predefined_acl = "private"
+}
+```
+
+add two stages
+```
+image:
+  name: hashicorp/terraform:light
+  entrypoint:
+    - '/usr/bin/env'
+    - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+
+stages:
+  - create_infra
+  - clear_infra
+
+create infra:
+  stage: create_infra
+  before_script:
+    - cd gitlab-ci/infra/terraform 
+    - rm -rf .terraform
+    - terraform --version
+    - mkdir -p ./credentials
+    - echo $SERVICEACCOUNT | base64 -d > ./credentials/project.json
+    - mv terraform.tfvars.example terraform.tfvars
+    - echo CI_COMMIT_REF_NAME=$CI_COMMIT_REF_NAME
+    - export TF_VAR_vm_name=$CI_COMMIT_REF_NAME
+    - terraform init
+  script:
+    - terraform validate
+    - terraform plan -out "planfile"
+    - terraform apply -input=false "planfile"
+
+clear infra:
+  stage: clear_infra
+  when: manual
+  before_script:
+    - cd gitlab-ci/infra/terraform
+    - mkdir -p ./credentials
+    - echo $SERVICEACCOUNT | base64 -d > ./credentials/project.json
+    - mv terraform.tfvars.example terraform.tfvars
+    - export TF_VAR_vm_name=$CI_COMMIT_REF_NAME
+  script:
+    - terraform init
+    - terraform destroy -auto-approve
+```
