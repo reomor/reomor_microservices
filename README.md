@@ -885,3 +885,12 @@ branch review:
   except:
     - master
 ```
+to create server for every branch use terrraform and it's [integration with Gitlab pipline](https://medium.com/@timhberry/terraform-pipelines-in-gitlab-415b9d842596)
+because i'm using foreign manual i'm:
+adding credentials from GCP
+```
+cat gitlab-ci/infra/credentials/project.json | base64 -w0
+```
+to Gitlab -> Settings -> CI/CD -> Variables (SERVICEACCOUNT)
+
+https://www.terraform.io/docs/configuration/environment-variables.html
