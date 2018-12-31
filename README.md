@@ -834,3 +834,22 @@ create new project, add to remote repo
 ```
 git remote add gitlab2 http://35.205.189.16/homework/example2.git
 ```
+add job with manual confirmation
+```
+stages:
+  - build
+  - test
+  - review
+  - stage
+  - production
+...
+staging:
+  stage: stage
+  when: manual
+  script:
+    - echo 'Deploy'
+  environment:
+    name: stage
+    url: https://beta.example.com
+...
+```
