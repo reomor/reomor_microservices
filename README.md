@@ -853,3 +853,35 @@ staging:
     url: https://beta.example.com
 ...
 ```
+git tag regex limitation
+```
+staging:
+  stage: stage
+  when: manual
+  only:
+    - /^\d+\.\d+\.\d+/
+  script:
+    - echo 'Deploy'
+  environment:
+    name: stage
+    url: https://beta.example.com
+```
+add taged commit 
+```
+git commit -a -m 'comment'
+git tag 2.4.10
+git push gitlab2 gitlab-ci-2 --tags
+```
+dynamic environment for each branch
+```
+branch review:
+  stage: review
+  script: echo "Deploy to $CI_ENVIRONMENT_SLUG"
+  environment:
+    name: branch/$CI_COMMIT_REF_NAME
+    url: http://$CI_ENVIRONMENT_SLUG.example.com
+  only:
+    - branches
+  except:
+    - master
+```
