@@ -1067,3 +1067,9 @@ RUN mv ./docker/mongod.conf /etc/mongod.conf \
 CMD ["/reddit/docker/start.sh"]
 
 ```
+usefull commands 
+```
+docker system prune
+df -h
+du -sh *
+```

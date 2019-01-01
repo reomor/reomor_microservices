@@ -1,5 +1,7 @@
 FROM rimskiy/reddit-base:1.0
 
+RUN gem install bundler --version '1.16.0' --no-ri --no-rdoc
+
 COPY . /reddit
 WORKDIR /reddit
 RUN bundle install

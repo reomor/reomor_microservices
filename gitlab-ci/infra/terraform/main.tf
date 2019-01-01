@@ -9,7 +9,7 @@ resource "google_compute_instance" "gitlab-branch" {
   name         = "${var.vm_name}"
   machine_type = "g1-small"
   zone         = "${var.zone}"
-  tags         = ["gitlab-branch", "puma-default"]
+  tags         = ["puma-default"]
 
   metadata {
     ssh-keys = "appuser:${var.public_key_path}"
