@@ -6,56 +6,41 @@ services:
 stages:
   - build
   - test
-  - review
   - create_infra
+  - deploy
+  - review
   - stage
   - production
   - clear_infra
 
 variables:
   DATABASE_URL: 'mongodb://mongo/user_posts'
+  CI_SHORT_COMMIT_SHA: '$${CI_COMMIT_SHA:0:8}'
+  DOCKER_IMAGE: '${CI_COMMIT_REF_NAME}:1.0'
+  DOCKER_IP: '127.0.0.1'
 
 build_job:
   stage: build
   before_script: 
     - cd reddit
     - echo CI_COMMIT_REF_NAME=$CI_COMMIT_REF_NAME
-    - docker build -t $CI_COMMIT_REF_NAME .
+    - docker build -t $DOCKER_IMAGE .
+    - docker save -o /tmp/$DOCKER_IMAGE.tar $DOCKER_IMAGE
   script:
     - echo 'Building'
 
 test_unit_job:
   stage: test
-  services:
-    - mongo:latest
   script:
-    - ruby simpletest.rb
+    - echo DOCKER_IMAGE=$DOCKER_IMAGE
+    - docker run --rm $DOCKER_IMAGE ruby simpletest.rb
 
 test_integration_job:
   stage: test
   script:
     - echo 'Testing 2'
 
-deploy dev job:
-  stage: review
-  script:
-    - echo 'Deploy'
-  environment:
-    name: dev
-    url: http://dev.example.com
-
-branch review:
-  stage: review
-  script: echo "Deploy to $CI_ENVIRONMENT_SLUG"
-  environment:
-    name: branch/$CI_COMMIT_REF_NAME
-    url: http://$CI_ENVIRONMENT_SLUG.example.com
-  only:
-    - branches
-  except:
-    - master
-
-create infra job:
+create_infra_job:
   stage: create_infra
   image:
     name: hashicorp/terraform:light
@@ -76,6 +61,42 @@ create infra job:
     - terraform validate
     - terraform plan -out "planfile"
     - terraform apply -input=false "planfile"
+
+deploy_dev_job:
+  stage: deploy
+  image:
+    name: hashicorp/terraform:light
+    entrypoint:
+      - '/usr/bin/env'
+      - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+  variables:
+    VM_IP: 'cd gitlab-ci/infra/terraform; terraform output docker_external_ip'
+  before_script:
+    - echo $VM_IP
+    - eval export DOCKER_IP=${VM_IP}
+    - cd gitlab-ci/infra/terraform
+    - mkdir -p ./credentials
+    - echo $SERVICEACCOUNT | base64 -d > ./credentials/project.json
+    - mv terraform.tfvars.example terraform.tfvars
+  script:
+    - echo 'Deploy'
+    - docker save -o /tmp/$DOCKER_IMAGE.tar $DOCKER_IMAGE
+    - scp /tmp/$DOCKER_IMAGE.tar appuser@$VM_IP:/tmp
+  environment:
+    name: dev
+    url: http://dev.example.com
+
+branch_review:
+  stage: review
+  script: echo "Deploy to $CI_ENVIRONMENT_SLUG"
+  environment:
+    name: branch/$CI_COMMIT_REF_NAME
+    url: http://$DOCKER_IP:9292
+  only:
+    - branches
+  except:
+    - master
+
 staging:
   stage: stage
   when: manual
@@ -98,7 +119,7 @@ production:
     name: production
     url: https://example.com
 
-clear infra:
+clear_infra:
   stage: clear_infra
   image:
     name: hashicorp/terraform:light
@@ -111,7 +132,6 @@ clear infra:
     - mkdir -p ./credentials
     - echo $SERVICEACCOUNT | base64 -d > ./credentials/project.json
     - mv terraform.tfvars.example terraform.tfvars
-    - export TF_VAR_vm_name=$CI_COMMIT_REF_NAME
   script:
     - terraform init
     - terraform destroy -auto-approve
