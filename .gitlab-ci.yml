@@ -24,16 +24,20 @@ build_job:
   before_script: 
     - cd reddit
     - echo CI_COMMIT_REF_NAME=$CI_COMMIT_REF_NAME
-    - docker build -t $DOCKER_IMAGE .
-    - docker save -o /tmp/$DOCKER_IMAGE.tar $DOCKER_IMAGE
+    - echo DOCKER_IMAGE=$DOCKER_IMAGE
   script:
-    - echo 'Building'
+    - docker build -t $DOCKER_IMAGE .
+    - docker login -u $HUB_USER -p $HUB_PASS
+    - docker tag $DOCKER_IMAGE $HUB_USER/$DOCKER_IMAGE
+    - docker push $HUB_USER/$DOCKER_IMAGE
 
 test_unit_job:
   stage: test
+  image:
+    name: $HUB_USER/$DOCKER_IMAGE
   script:
     - echo DOCKER_IMAGE=$DOCKER_IMAGE
-    - docker run --rm $DOCKER_IMAGE ruby simpletest.rb
+    - ruby simpletest.rb
 
 test_integration_job:
   stage: test
@@ -70,18 +74,13 @@ deploy_dev_job:
       - '/usr/bin/env'
       - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
   variables:
-    VM_IP: 'cd gitlab-ci/infra/terraform; terraform output docker_external_ip'
+    VM_IP: $(cd gitlab-ci/infra/terraform; terraform output docker_external_ip)
   before_script:
-    - echo $VM_IP
+    - echo VM_IP=$VM_IP
     - eval export DOCKER_IP=${VM_IP}
-    - cd gitlab-ci/infra/terraform
-    - mkdir -p ./credentials
-    - echo $SERVICEACCOUNT | base64 -d > ./credentials/project.json
-    - mv terraform.tfvars.example terraform.tfvars
+    - echo DOCKER_IP=$DOCKER_IP
   script:
     - echo 'Deploy'
-    - docker save -o /tmp/$DOCKER_IMAGE.tar $DOCKER_IMAGE
-    - scp /tmp/$DOCKER_IMAGE.tar appuser@$VM_IP:/tmp
   environment:
     name: dev
     url: http://dev.example.com
