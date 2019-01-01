@@ -4,4 +4,4 @@
 
 source /reddit/docker/db_config
 
-/reddit/puma || exit
+puma || exit
