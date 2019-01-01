@@ -8,8 +8,9 @@ COPY . /reddit
 
 WORKDIR /reddit
 
-RUN bundle install && \
-    mv ./docker/mongod.conf /etc/mongod.conf && \
-    chmod 0777 /reddit/start.sh  
+RUN bundle install
 
-CMD ["/reddit/start.sh"]
+RUN mv ./docker/mongod.conf /etc/mongod.conf && \
+    chmod 0777 /reddit/docker/start.sh
+
+CMD ["/reddit/docker/start.sh"]
