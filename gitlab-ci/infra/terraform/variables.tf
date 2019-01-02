@@ -6,6 +6,9 @@ variable vm_name {
   description = "Current branch VM name"
 }
 
+variable hub_docker_image {
+  description = "Docker image to deploy from Hub"
+}
 
 variable region {
   description = "Region"

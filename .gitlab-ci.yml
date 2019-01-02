@@ -7,7 +7,6 @@ stages:
   - build
   - test
   - create_infra
-  - deploy
   - review
   - stage
   - production
@@ -17,7 +16,6 @@ variables:
   DATABASE_URL: 'mongodb://mongo/user_posts'
   CI_SHORT_COMMIT_SHA: '$${CI_COMMIT_SHA:0:8}'
   DOCKER_IMAGE: '${CI_COMMIT_REF_NAME}:1.0'
-  DOCKER_IP: '127.0.0.1'
 
 build_job:
   stage: build
@@ -61,6 +59,7 @@ create_infra_job:
     - mv terraform.tfvars.example terraform.tfvars
     - echo CI_COMMIT_REF_NAME=$CI_COMMIT_REF_NAME
     - export TF_VAR_vm_name=$CI_COMMIT_REF_NAME
+    - export TF_VAR_hub_docker_image=$HUB_USER/$DOCKER_IMAGE
     - terraform init
     - terraform destroy -auto-approve
   script:
@@ -68,8 +67,8 @@ create_infra_job:
     - terraform plan -out "planfile"
     - terraform apply -input=false "planfile"
 
-deploy_dev_job:
-  stage: deploy
+branch_review:
+  stage: review
   image:
     name: hashicorp/terraform:light
     entrypoint:
@@ -82,25 +81,10 @@ deploy_dev_job:
     - echo $SERVICEACCOUNT | base64 -d > ./credentials/project.json
     - mv terraform.tfvars.example terraform.tfvars
     - terraform init
-    - eval export DOCKER_IP=$(terraform output docker_external_ip)
+    - export DOCKER_IP=$(terraform output docker_external_ip)
     - echo DOCKER_IP=$DOCKER_IP
-    - mkdir -p ~/.ssh
-    - chmod 700 ~/.ssh
-    - echo $TF_VAR_public_key_path > ~/.ssh/appuser.pub
-    - chmod 644 ~/.ssh/appuser.pub
-    - echo $TF_VAR_private_key_path > ~/.ssh/appuser
-    - chmod 600 ~/.ssh/appuser
-    - cat ~/.ssh/appuser
   script:
     - echo 'Deploy'
-    - ssh appuser@$DOCKER_IP -o StrictHostKeyChecking=no -i ~/.ssh/appuser -vvv 'sudo docker run -d -p 9292:9292 $HUB_USER/$DOCKER_IMAGE'
-  environment:
-    name: dev
-    url: http://dev.example.com
-
-branch_review:
-  stage: review
-  script: echo "Deploy to $CI_ENVIRONMENT_SLUG"
   environment:
     name: branch/$CI_COMMIT_REF_NAME
     url: http://$DOCKER_IP:9292
@@ -144,6 +128,8 @@ clear_infra:
     - mkdir -p ./credentials
     - echo $SERVICEACCOUNT | base64 -d > ./credentials/project.json
     - mv terraform.tfvars.example terraform.tfvars
+    - export TF_VAR_vm_name=$CI_COMMIT_REF_NAME
+    - export TF_VAR_hub_docker_image=$HUB_USER/$DOCKER_IMAGE
   script:
     - terraform init
     - terraform destroy -auto-approve

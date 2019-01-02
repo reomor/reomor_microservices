@@ -28,4 +28,16 @@ resource "google_compute_instance" "gitlab-branch" {
       # ephemeral
     }
   }
+
+  connection {
+    type        = "ssh"
+    user        = "appuser"
+    agent       = false
+    private_key = "${var.private_key_path}"
+  }
+  provisioner "remote-exec" {
+    inline = [
+      "sudo docker run -d -p 9292:9292 ${var.hub_docker_image}"
+    ]
+  }
 }
