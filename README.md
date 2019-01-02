@@ -1245,6 +1245,7 @@ eval $(docker-machine env docker-host)
 docker run --rm -p 9090:9090 -d --name prometheus prom/prometheus:v2.1.0
 docker-machine ip docker-host
 docker stop prometheus
+docker-compose logs --follow
 ```
 build each microservice
 ```
