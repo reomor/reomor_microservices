@@ -1073,3 +1073,148 @@ docker system prune
 df -h
 du -sh *
 ```
+result gitlab-ci.yml
+with CI\CD variables
+- DOCKER_IP
+- HUB_PASS
+- HUB_USER
+- SERVICEACCOUNT
+- TF_VAR_private_key_path
+- TF_VAR_public_key_path
+```
+image: docker:stable
+
+services:
+  - docker:dind
+
+stages:
+  - build
+  - test
+  - create_infra
+  - review
+  - stage
+  - production
+  - clear_infra
+
+variables:
+  DATABASE_URL: 'mongodb://mongo/user_posts'
+  CI_SHORT_COMMIT_SHA: '$${CI_COMMIT_SHA:0:8}'
+  DOCKER_IMAGE: '${CI_COMMIT_REF_NAME}:1.0'
+
+build_job:
+  stage: build
+  before_script: 
+    - cd reddit
+    - echo CI_COMMIT_REF_NAME=$CI_COMMIT_REF_NAME
+    - echo DOCKER_IMAGE=$DOCKER_IMAGE
+    - docker login -u $HUB_USER -p $HUB_PASS
+  script:
+    - docker build -t $DOCKER_IMAGE .
+    - docker tag $DOCKER_IMAGE $HUB_USER/$DOCKER_IMAGE
+    - docker push $HUB_USER/$DOCKER_IMAGE
+
+test_unit_job:
+  stage: test
+  image:
+    name: $HUB_USER/$DOCKER_IMAGE
+  script:
+    - echo DOCKER_IMAGE=$DOCKER_IMAGE
+    - cd /reddit
+    - ruby simpletest.rb
+
+test_integration_job:
+  stage: test
+  script:
+    - echo 'Testing 2'
+
+create_infra_job:
+  stage: create_infra
+  image:
+    name: hashicorp/terraform:light
+    entrypoint:
+      - '/usr/bin/env'
+      - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+  before_script:
+    - cd gitlab-ci/infra/terraform 
+    - rm -rf .terraform
+    - terraform --version
+    - mkdir -p ./credentials
+    - echo $SERVICEACCOUNT | base64 -d > ./credentials/project.json
+    - mv terraform.tfvars.example terraform.tfvars
+    - echo CI_COMMIT_REF_NAME=$CI_COMMIT_REF_NAME
+    - export TF_VAR_vm_name=$CI_COMMIT_REF_NAME
+    - export TF_VAR_hub_docker_image=$HUB_USER/$DOCKER_IMAGE
+    - terraform init
+    - terraform destroy -auto-approve
+  script:
+    - terraform validate
+    - terraform plan -out "planfile"
+    - terraform apply -input=false "planfile"
+
+branch_review:
+  stage: review
+  image:
+    name: hashicorp/terraform:light
+    entrypoint:
+      - '/usr/bin/env'
+      - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+  before_script:
+    - echo VM_IP=$VM_IP
+    - cd gitlab-ci/infra/terraform
+    - mkdir -p ./credentials
+    - echo $SERVICEACCOUNT | base64 -d > ./credentials/project.json
+    - mv terraform.tfvars.example terraform.tfvars
+    - terraform init
+    - export DOCKER_IP=$(terraform output docker_external_ip)
+    - echo DOCKER_IP=$DOCKER_IP
+  script:
+    - echo 'Deploy'
+  environment:
+    name: branch/$CI_COMMIT_REF_NAME
+    url: http://$DOCKER_IP:9292
+  only:
+    - branches
+  except:
+    - master
+
+staging:
+  stage: stage
+  when: manual
+  only:
+    - /^\d+\.\d+\.\d+/
+  script:
+    - echo 'Deploy'
+  environment:
+    name: stage
+    url: https://beta.example.com
+
+production:
+  stage: production
+  when: manual
+  only:
+    - /^\d+\.\d+\.\d+/
+  script:
+    - echo 'Deploy'
+  environment:
+    name: production
+    url: https://example.com
+
+clear_infra:
+  stage: clear_infra
+  image:
+    name: hashicorp/terraform:light
+    entrypoint:
+      - '/usr/bin/env'
+      - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+  when: manual
+  before_script:
+    - cd gitlab-ci/infra/terraform
+    - mkdir -p ./credentials
+    - echo $SERVICEACCOUNT | base64 -d > ./credentials/project.json
+    - mv terraform.tfvars.example terraform.tfvars
+    - export TF_VAR_vm_name=$CI_COMMIT_REF_NAME
+    - export TF_VAR_hub_docker_image=$HUB_USER/$DOCKER_IMAGE
+  script:
+    - terraform init
+    - terraform destroy -auto-approve
+```
