@@ -1224,3 +1224,23 @@ clear_infra:
 [![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=monitoring-1)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/monitoring-1)
 
 ### description
+
+check existing firewall rules in GCP
+```
+gcloud compute firewall-rules create prometheus-default --allow tcp:9090
+gcloud compute firewall-rules create puma-default --allow tcp:9292
+```
+create VM in GCP
+```
+export GOOGLE_PROJECT=docker-225016
+docker-machine create --driver google \
+--google-machine-image https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-1604-lts \
+--google-machine-type n1-standard-1 \
+--google-zone europe-west1-b \
+docker-host
+
+eval $(docker-machine env docker-host)
+docker run --rm -p 9090:9090 -d --name prometheus prom/prometheus:v2.1.0
+docker-machine ip docker-host
+docker stop prometheus
+```
