@@ -1218,3 +1218,9 @@ clear_infra:
     - terraform init
     - terraform destroy -auto-approve
 ```
+
+## HW18
+
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=monitoring-1)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/monitoring-1)
+
+### description
