@@ -1255,4 +1255,172 @@ build each microservice
 for i in ui post-py comment; do cd src/$i; bash docker_build.sh; cd -; done
 ```
 https://cloud.docker.com/u/rimskiy/repository/list
+
+https://github.com/prometheus/
+docker-compose.yml
+```
+version: '3.3'
+services:
+
+  post_db:
+    image: mongo:${MONGO_IMAGE_VERSION}
+    volumes:
+      - post_db:/data/db
+    networks:
+      back_net:
+         aliases:
+           - mongodb
+           - post_db
+           - comment_db
+
+  ui:
+    image: ${USER_NAME}/ui:${UI_SERVICE_VERSION}
+    ports:
+      - ${UI_PUBLICATION_PORT}:9292/tcp
+    networks:
+      - front_net
+
+  post:
+    image: ${USER_NAME}/post:${POST_SERVICE_VERSION}
+    networks:
+      front_net:
+        aliases:
+          - post
+      back_net:
+        aliases:
+          - post
+
+  comment:
+    image: ${USER_NAME}/comment:${COMMENT_SERVICE_VERSION}
+    networks:
+      front_net:
+        aliases:
+          - comment
+      back_net:
+        aliases:
+          - comment
+  
+  prometheus:
+    image: ${USER_NAME}/prometheus
+    ports:
+      - '9090:9090'
+    volumes:
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention=1d'
+    networks:
+      front_net:
+        aliases:
+          - prometheus
+      back_net:
+        aliases:
+          - prometheus
+```
+prometheus.yml
+```
+global:
+  scrape_interval: '5s'
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets:
+        - 'localhost:9090'
+
+  - job_name: 'ui'
+    static_configs:
+      - targets:
+        - 'ui:9292'
+
+  - job_name: 'comment'
+    static_configs:
+      - targets:
+        - 'comment:9292'
+```
+https://github.com/prometheus/node_exporter
+docker-compose.yml
+```
+node-exporter:
+    image: prom/node-exporter:v0.15.2
+    user: root
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.ignored-mount-points="^/(sys|proc|dev|host|etc)($$|/)"'
+    networks:
+      front_net:
+        aliases:
+          - node-exporter
+      back_net:
+        aliases:
+          - node-exporter
+```
+prometheus.yml
+```
+- job_name: 'node'
+    static_configs:
+      - targets:
+        - 'node-exporter:9100'
+```
 https://github.com/percona/mongodb_exporter
+docker-compose.yml
+```
+mongodb_exporter:
+    image: rimskiy/mongodb_exporter:latest
+    user: root
+    command:
+      - '-mongodb.uri=mongodb://mongodb:27017'
+      - '-web.listen-address=mongodb-exporter:9104'
+    networks:
+      back_net:
+        aliases:
+          - mongodb-exporter
+```
+prometheus.yml
+```
+- job_name: 'mongodb'
+    static_configs:
+      - targets:
+        - 'mongodb-exporter:9104'
+```
+https://github.com/prometheus/blackbox_exporter
+docker-compose.yml
+```
+blackbox_exporter:
+    image: prom/blackbox-exporter:latest
+    user: root
+    ports:
+      - '9115:9115'
+    networks:
+      front_net:
+        aliases:
+          - blackbox-exporter
+      back_net:
+        aliases:
+          - blackbox-exporter
+```
+prometheus.yml
+```
+- job_name: 'blackbox'
+  metrics_path: /probe
+  params:
+    module: [http_2xx]  # Look for a HTTP 200 response.
+  static_configs:
+    - targets:
+      - http://comment
+      - http://post
+      - http://ui:9292
+  relabel_configs:
+    - source_labels: [__address__]
+      target_label: __param_target
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: blackbox-exporter:9115
+```
