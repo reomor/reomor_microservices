@@ -1243,6 +1243,9 @@ docker-host
 
 eval $(docker-machine env docker-host)
 docker run --rm -p 9090:9090 -d --name prometheus prom/prometheus:v2.1.0
+```
+useful commands
+```
 docker-machine ip docker-host
 docker stop prometheus
 docker-compose logs --follow
@@ -1252,3 +1255,4 @@ build each microservice
 for i in ui post-py comment; do cd src/$i; bash docker_build.sh; cd -; done
 ```
 https://cloud.docker.com/u/rimskiy/repository/list
+https://github.com/percona/mongodb_exporter

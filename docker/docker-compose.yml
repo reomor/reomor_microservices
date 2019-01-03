@@ -8,6 +8,7 @@ services:
     networks:
       back_net:
          aliases:
+           - mongodb
            - post_db
            - comment_db
 
@@ -74,6 +75,17 @@ services:
       back_net:
         aliases:
           - node-exporter
+    
+  mongodb_exporter:
+    image: rimskiy/mongodb_exporter:latest
+    user: root
+    command:
+      - '-mongodb.uri=mongodb://mongodb:27017'
+      - '-web.listen-address=mongodb-exporter:9104'
+    networks:
+      back_net:
+        aliases:
+          - mongodb-exporter
 volumes:
   post_db:
   prometheus_data:
