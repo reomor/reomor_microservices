@@ -1424,7 +1424,10 @@ prometheus.yml
     - target_label: __address__
       replacement: blackbox-exporter:9115
 ```
-Makefile to do
+Makefile
+- http://rus-linux.net/nlib.php?name=/MyLDP/algol/gnu_make/gnu_make_3-79_russian_manual.html#SEC33
+- https://habr.com/post/132524/
+- https://www.ibm.com/developerworks/ru/library/l-debugmake/index.html
 ```
 USER_NAME ?= $(USERNAME) # default if not set
 
