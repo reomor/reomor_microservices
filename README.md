@@ -1453,3 +1453,9 @@ compose :
 clean:
 	cd docker; docker-compose down
 ```
+
+## HW19
+
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=monitoring-2)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/monitoring-2)
+
+### description
