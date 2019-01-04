@@ -1466,7 +1466,7 @@ Docker containers monitoring
 docker-compose up -d
 docker-compose -f docker-compose-monitoring.yml up -d
 ```
-create firewall rule in GCP
+create firewall rule for cadvance in GCP
 ```
 gcloud compute firewall-rules create default-cadviser \
 --allow tcp:8080 \
@@ -1622,4 +1622,35 @@ networks:
     external: true
   back_net:
     external: true
+```
+create firewall rule for grafana in GCP
+```
+gcloud compute firewall-rules create default-grafana \
+--allow tcp:3000 \
+--target-tags=docker-machine \
+--description="Allow grafana connections" \
+--direction=INGRESS
+```
+grafana
+```
+...
+grafana:
+    image: grafana/grafana:5.0.0
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=secret
+    depends_on:
+      - prometheus
+    ports:
+      - 3000:3000
+    networks:
+      front_net:
+        aliases:
+          - grafana
+      back_net:
+        aliases:
+          - grafana
+...
 ```
