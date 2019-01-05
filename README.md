@@ -767,6 +767,8 @@ deploy_job:
 ```
 
 Gitlab runner installation
+
+[runner registration](https://docs.gitlab.com/runner/register/index.html)
 ```
 touch install_and_register_gl-runners.sh
 chmod +x install_and_register_gl-runners.sh
@@ -821,3 +823,398 @@ sudo ./install_and_register_gl-runners.sh -u http://35.205.189.16/ -t t.o.k.e.n 
 ```
 
 [Slack channel notifications here](https://devops-team-otus.slack.com/messages/CDBMV15RU)
+
+## HW17
+
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=gitlab-ci-2)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/gitlab-ci-2)
+
+### description
+
+create new project, add to remote repo
+```
+git remote add gitlab2 http://35.205.189.16/homework/example2.git
+```
+add job with manual confirmation
+```
+stages:
+  - build
+  - test
+  - review
+  - stage
+  - production
+...
+staging:
+  stage: stage
+  when: manual
+  script:
+    - echo 'Deploy'
+  environment:
+    name: stage
+    url: https://beta.example.com
+...
+```
+git tag regex limitation
+```
+staging:
+  stage: stage
+  when: manual
+  only:
+    - /^\d+\.\d+\.\d+/
+  script:
+    - echo 'Deploy'
+  environment:
+    name: stage
+    url: https://beta.example.com
+```
+add taged commit 
+```
+git commit -a -m 'comment'
+git tag 2.4.10
+git push gitlab2 gitlab-ci-2 --tags
+```
+dynamic environment for each branch
+```
+branch review:
+  stage: review
+  script: echo "Deploy to $CI_ENVIRONMENT_SLUG"
+  environment:
+    name: branch/$CI_COMMIT_REF_NAME
+    url: http://$CI_ENVIRONMENT_SLUG.example.com
+  only:
+    - branches
+  except:
+    - master
+```
+to create server for every branch use terrraform and it's [integration with Gitlab pipline](https://medium.com/@timhberry/terraform-pipelines-in-gitlab-415b9d842596)
+because i'm using foreign manual i'm:
+adding credentials from GCP
+```
+cat gitlab-ci/infra/credentials/project.json | base64 -w0
+```
+
+[environment variables](https://www.terraform.io/docs/configuration/environment-variables.html)
+
+add Gitlab -> Settings -> CI/CD -> Variables
+- SERVICEACCOUNT
+- TF_VAR_private_key_path
+- TF_VAR_public_key_path
+
+before creating infrastructure must exist:
+- rule
+```
+resource "google_compute_firewall" "firewall_puma" {
+  name    = "allow-puma-default"
+  network = "default"
+
+  allow {
+    protocol = "tcp"
+    ports    = ["9292"]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+  target_tags   = ["puma-default"]
+}
+```
+- google storage bucket
+```
+resource "google_storage_bucket" "gitlab_state_bucket" {
+  
+  name = "gitlab-terraform-state-storage-bucket"
+
+  versioning {
+    enabled = true
+  }
+
+  force_destroy = true
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "google_storage_bucket_acl" "state_storage_bucket_acl" {
+  bucket         = "${google_storage_bucket.gitlab_state_bucket.name}"
+  predefined_acl = "private"
+}
+```
+
+add two stages
+```
+image:
+  name: hashicorp/terraform:light
+  entrypoint:
+    - '/usr/bin/env'
+    - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+
+stages:
+  - create_infra
+  - clear_infra
+
+create infra:
+  stage: create_infra
+  before_script:
+    - cd gitlab-ci/infra/terraform 
+    - rm -rf .terraform
+    - terraform --version
+    - mkdir -p ./credentials
+    - echo $SERVICEACCOUNT | base64 -d > ./credentials/project.json
+    - mv terraform.tfvars.example terraform.tfvars
+    - echo CI_COMMIT_REF_NAME=$CI_COMMIT_REF_NAME
+    - export TF_VAR_vm_name=$CI_COMMIT_REF_NAME
+    - terraform init
+  script:
+    - terraform validate
+    - terraform plan -out "planfile"
+    - terraform apply -input=false "planfile"
+
+clear infra:
+  stage: clear_infra
+  when: manual
+  before_script:
+    - cd gitlab-ci/infra/terraform
+    - mkdir -p ./credentials
+    - echo $SERVICEACCOUNT | base64 -d > ./credentials/project.json
+    - mv terraform.tfvars.example terraform.tfvars
+    - export TF_VAR_vm_name=$CI_COMMIT_REF_NAME
+  script:
+    - terraform init
+    - terraform destroy -auto-approve
+```
+creating non-optimazed Dockerfile for reddit based on ubuntu
+```
+FROM ubuntu:16.04
+
+RUN apt-get update && \
+    apt-get install -y mongodb-server ruby-full ruby-dev build-essential && \
+    gem install bundler
+
+COPY . /reddit
+
+WORKDIR /reddit
+
+RUN bundle install && \
+    mv ./docker/mongod.conf /etc/mongod.conf && \
+    chmod 0777 /reddit/start.sh    
+
+CMD ["/reddit/start.sh"]
+```
+for using docker images there is a need to create previleged runners and off shared and group runners
+Settings -> Ci/CD -> Runners  
+```
+#!/bin/bash
+
+# my_script -p '/some/path' -a5
+EXTERNAL_URL=
+TOKEN=
+COUNT=1
+while getopts ":u:t:c:" opt; do
+  case $opt in
+    u) EXTERNAL_URL="$OPTARG"
+    ;;
+    t) TOKEN="$OPTARG"
+    ;;
+    c) COUNT="$OPTARG"
+    ;;
+    \?) echo "Invalid option -$OPTARG" >&2
+    ;;
+  esac
+done
+
+printf "External Gitlab url is %s\n" "$EXTERNAL_URL"
+printf "TOKEN is %s\n" "$TOKEN"
+printf "COUNT is %s\n" "$COUNT"
+
+for i in `seq 1 $COUNT`; do
+            #echo gitlab-runner-$i
+            docker run -d --name gitlab-runner-$i --restart always \
+            -v /srv/gitlab-runner/config:/etc/gitlab-runner \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            gitlab/gitlab-runner:latest
+
+            docker exec -it gitlab-runner gitlab-runner register \
+	          --non-interactive \
+            --url "$EXTERNAL_URL" \
+            --registration-token "$TOKEN" \
+            --executor "docker" \
+            --docker-image docker:latest \
+            --docker-privileged \
+            --description "docker-runner"
+        done
+```
+during installation was error, because of bundler version, the fix is:
+```
+...
+&& gem install bundler --version '<= 1.16.1' --no-ri --no-rdoc
+...
+```
+new version of Dockerfile
+```
+FROM ubuntu:16.04
+
+RUN apt-get update \
+    && apt-get install -y ruby-full ruby-dev build-essential mongodb-server \
+    && gem install bundler --version '<= 1.16.1' --no-ri --no-rdoc
+
+COPY . /reddit
+
+WORKDIR /reddit
+
+RUN bundle install
+
+RUN mv ./docker/mongod.conf /etc/mongod.conf \
+    && chmod 0777 /reddit/docker/start.sh
+
+CMD ["/reddit/docker/start.sh"]
+
+```
+usefull commands 
+```
+docker system prune
+df -h
+du -sh *
+```
+result gitlab-ci.yml
+with CI\CD variables
+- DOCKER_IP
+- HUB_PASS
+- HUB_USER
+- SERVICEACCOUNT
+- TF_VAR_private_key_path
+- TF_VAR_public_key_path
+```
+image: docker:stable
+
+services:
+  - docker:dind
+
+stages:
+  - build
+  - test
+  - create_infra
+  - review
+  - stage
+  - production
+  - clear_infra
+
+variables:
+  DATABASE_URL: 'mongodb://mongo/user_posts'
+  CI_SHORT_COMMIT_SHA: '$${CI_COMMIT_SHA:0:8}'
+  DOCKER_IMAGE: '${CI_COMMIT_REF_NAME}:1.0'
+
+build_job:
+  stage: build
+  before_script: 
+    - cd reddit
+    - echo CI_COMMIT_REF_NAME=$CI_COMMIT_REF_NAME
+    - echo DOCKER_IMAGE=$DOCKER_IMAGE
+    - docker login -u $HUB_USER -p $HUB_PASS
+  script:
+    - docker build -t $DOCKER_IMAGE .
+    - docker tag $DOCKER_IMAGE $HUB_USER/$DOCKER_IMAGE
+    - docker push $HUB_USER/$DOCKER_IMAGE
+
+test_unit_job:
+  stage: test
+  image:
+    name: $HUB_USER/$DOCKER_IMAGE
+  script:
+    - echo DOCKER_IMAGE=$DOCKER_IMAGE
+    - cd /reddit
+    - ruby simpletest.rb
+
+test_integration_job:
+  stage: test
+  script:
+    - echo 'Testing 2'
+
+create_infra_job:
+  stage: create_infra
+  image:
+    name: hashicorp/terraform:light
+    entrypoint:
+      - '/usr/bin/env'
+      - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+  before_script:
+    - cd gitlab-ci/infra/terraform 
+    - rm -rf .terraform
+    - terraform --version
+    - mkdir -p ./credentials
+    - echo $SERVICEACCOUNT | base64 -d > ./credentials/project.json
+    - mv terraform.tfvars.example terraform.tfvars
+    - echo CI_COMMIT_REF_NAME=$CI_COMMIT_REF_NAME
+    - export TF_VAR_vm_name=$CI_COMMIT_REF_NAME
+    - export TF_VAR_hub_docker_image=$HUB_USER/$DOCKER_IMAGE
+    - terraform init
+    - terraform destroy -auto-approve
+  script:
+    - terraform validate
+    - terraform plan -out "planfile"
+    - terraform apply -input=false "planfile"
+
+branch_review:
+  stage: review
+  image:
+    name: hashicorp/terraform:light
+    entrypoint:
+      - '/usr/bin/env'
+      - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+  before_script:
+    - echo VM_IP=$VM_IP
+    - cd gitlab-ci/infra/terraform
+    - mkdir -p ./credentials
+    - echo $SERVICEACCOUNT | base64 -d > ./credentials/project.json
+    - mv terraform.tfvars.example terraform.tfvars
+    - terraform init
+    - export DOCKER_IP=$(terraform output docker_external_ip)
+    - echo DOCKER_IP=$DOCKER_IP
+  script:
+    - echo 'Deploy'
+  environment:
+    name: branch/$CI_COMMIT_REF_NAME
+    url: http://$DOCKER_IP:9292
+  only:
+    - branches
+  except:
+    - master
+
+staging:
+  stage: stage
+  when: manual
+  only:
+    - /^\d+\.\d+\.\d+/
+  script:
+    - echo 'Deploy'
+  environment:
+    name: stage
+    url: https://beta.example.com
+
+production:
+  stage: production
+  when: manual
+  only:
+    - /^\d+\.\d+\.\d+/
+  script:
+    - echo 'Deploy'
+  environment:
+    name: production
+    url: https://example.com
+
+clear_infra:
+  stage: clear_infra
+  image:
+    name: hashicorp/terraform:light
+    entrypoint:
+      - '/usr/bin/env'
+      - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+  when: manual
+  before_script:
+    - cd gitlab-ci/infra/terraform
+    - mkdir -p ./credentials
+    - echo $SERVICEACCOUNT | base64 -d > ./credentials/project.json
+    - mv terraform.tfvars.example terraform.tfvars
+    - export TF_VAR_vm_name=$CI_COMMIT_REF_NAME
+    - export TF_VAR_hub_docker_image=$HUB_USER/$DOCKER_IMAGE
+  script:
+    - terraform init
+    - terraform destroy -auto-approve
+```
