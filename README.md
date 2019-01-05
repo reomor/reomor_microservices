@@ -1701,3 +1701,11 @@ receivers:
   slack_configs:
   - channel: '#my_channel'
 ```
+
+## HW20
+
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=logging-1)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/logging-1)
+
+### description
+
+Logging and distributed tracing
