@@ -1654,3 +1654,11 @@ grafana:
           - grafana
 ...
 ```
+grafana queries
+```
+rate(ui_request_count{http_status=~"^[45].*"}[1m])
+rate(ui_request_count[1m])
+histogram_quantile(0.95, sum(rate(ui_request_latency_seconds_bucket[5m])) by (le))
+rate(post_count[1h])
+rate(comment_count[1h])
+```
