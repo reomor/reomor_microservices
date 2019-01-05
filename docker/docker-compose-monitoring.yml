@@ -39,7 +39,7 @@ services:
     image: ${USER_NAME}/alertmanager
     command:
       - '--config.file=/etc/alertmanager/config.yml'
-    port:
+    ports:
       - '9093:9093'
     networks:
       front_net:
