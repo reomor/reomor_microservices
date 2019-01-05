@@ -1662,3 +1662,42 @@ histogram_quantile(0.95, sum(rate(ui_request_latency_seconds_bucket[5m])) by (le
 rate(post_count[1h])
 rate(comment_count[1h])
 ```
+create firewall rule for alertmanager in GCP
+```
+gcloud compute firewall-rules create default-alertmanager \
+--allow tcp:9093 \
+--target-tags=docker-machine \
+--description="Allow alertmanager connections" \
+--direction=INGRESS
+```
+alertmanager
+```
+...
+alertmanager:
+    image: ${USER_NAME}/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/config.yml'
+    port:
+      - '9093:9093'
+    networks:
+      front_net:
+        aliases:
+          - alertmanager
+      back_net:
+        aliases:
+          - alertmanager
+...
+```
+alertmanager config in Dockerfile
+```
+global:
+  slack_api_url: 'https://hooks.slack.com/services/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'
+
+route:
+  receiver: 'slack-notifications'
+
+receivers:
+- name: 'slack-notifications'
+  slack_configs:
+  - channel: '#my_channel'
+```

@@ -34,6 +34,20 @@ services:
       back_net:
         aliases:
           - cadvisor
+
+  alertmanager:
+    image: ${USER_NAME}/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/config.yml'
+    port:
+      - '9093:9093'
+    networks:
+      front_net:
+        aliases:
+          - alertmanager
+      back_net:
+        aliases:
+          - alertmanager
   
   grafana:
     image: grafana/grafana:5.0.0
