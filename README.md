@@ -1218,3 +1218,238 @@ clear_infra:
     - terraform init
     - terraform destroy -auto-approve
 ```
+
+## HW18
+
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=monitoring-1)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/monitoring-1)
+
+### description
+
+Prometheus installation
+
+check existing firewall rules in GCP
+```
+gcloud compute firewall-rules create prometheus-default --allow tcp:9090
+gcloud compute firewall-rules create puma-default --allow tcp:9292
+```
+create VM in GCP
+```
+export GOOGLE_PROJECT=docker-225016
+docker-machine create --driver google \
+--google-machine-image https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-1604-lts \
+--google-machine-type n1-standard-1 \
+--google-zone europe-west1-b \
+docker-host
+
+eval $(docker-machine env docker-host)
+docker run --rm -p 9090:9090 -d --name prometheus prom/prometheus:v2.1.0
+```
+useful commands
+```
+docker-machine ip docker-host
+docker stop prometheus
+docker-compose logs --follow
+```
+build each microservice
+```
+for i in ui post-py comment; do cd src/$i; bash docker_build.sh; cd -; done
+```
+https://cloud.docker.com/u/rimskiy/repository/list
+
+https://github.com/prometheus/
+docker-compose.yml
+```
+version: '3.3'
+services:
+
+  post_db:
+    image: mongo:${MONGO_IMAGE_VERSION}
+    volumes:
+      - post_db:/data/db
+    networks:
+      back_net:
+         aliases:
+           - mongodb
+           - post_db
+           - comment_db
+
+  ui:
+    image: ${USER_NAME}/ui:${UI_SERVICE_VERSION}
+    ports:
+      - ${UI_PUBLICATION_PORT}:9292/tcp
+    networks:
+      - front_net
+
+  post:
+    image: ${USER_NAME}/post:${POST_SERVICE_VERSION}
+    networks:
+      front_net:
+        aliases:
+          - post
+      back_net:
+        aliases:
+          - post
+
+  comment:
+    image: ${USER_NAME}/comment:${COMMENT_SERVICE_VERSION}
+    networks:
+      front_net:
+        aliases:
+          - comment
+      back_net:
+        aliases:
+          - comment
+  
+  prometheus:
+    image: ${USER_NAME}/prometheus
+    ports:
+      - '9090:9090'
+    volumes:
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention=1d'
+    networks:
+      front_net:
+        aliases:
+          - prometheus
+      back_net:
+        aliases:
+          - prometheus
+```
+prometheus.yml
+```
+global:
+  scrape_interval: '5s'
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets:
+        - 'localhost:9090'
+
+  - job_name: 'ui'
+    static_configs:
+      - targets:
+        - 'ui:9292'
+
+  - job_name: 'comment'
+    static_configs:
+      - targets:
+        - 'comment:9292'
+```
+https://github.com/prometheus/node_exporter
+docker-compose.yml
+```
+node-exporter:
+    image: prom/node-exporter:v0.15.2
+    user: root
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.ignored-mount-points="^/(sys|proc|dev|host|etc)($$|/)"'
+    networks:
+      front_net:
+        aliases:
+          - node-exporter
+      back_net:
+        aliases:
+          - node-exporter
+```
+prometheus.yml
+```
+- job_name: 'node'
+    static_configs:
+      - targets:
+        - 'node-exporter:9100'
+```
+https://github.com/percona/mongodb_exporter
+docker-compose.yml
+```
+mongodb_exporter:
+    image: rimskiy/mongodb_exporter:latest
+    user: root
+    command:
+      - '-mongodb.uri=mongodb://mongodb:27017'
+      - '-web.listen-address=mongodb-exporter:9104'
+    networks:
+      back_net:
+        aliases:
+          - mongodb-exporter
+```
+prometheus.yml
+```
+- job_name: 'mongodb'
+    static_configs:
+      - targets:
+        - 'mongodb-exporter:9104'
+```
+https://github.com/prometheus/blackbox_exporter
+docker-compose.yml
+```
+blackbox_exporter:
+    image: prom/blackbox-exporter:latest
+    user: root
+    ports:
+      - '9115:9115'
+    networks:
+      front_net:
+        aliases:
+          - blackbox-exporter
+      back_net:
+        aliases:
+          - blackbox-exporter
+```
+prometheus.yml
+```
+- job_name: 'blackbox'
+  metrics_path: /probe
+  params:
+    module: [http_2xx]  # Look for a HTTP 200 response.
+  static_configs:
+    - targets:
+      - http://comment
+      - http://post
+      - http://ui:9292
+  relabel_configs:
+    - source_labels: [__address__]
+      target_label: __param_target
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: blackbox-exporter:9115
+```
+Makefile
+- http://rus-linux.net/nlib.php?name=/MyLDP/algol/gnu_make/gnu_make_3-79_russian_manual.html#SEC33
+- https://habr.com/post/132524/
+- https://www.ibm.com/developerworks/ru/library/l-debugmake/index.html
+```
+USER_NAME ?= $(USERNAME) # default if not set
+
+all : prom ui post comment exporters
+.PHONY : all
+settings:
+	@echo USER_NAME=$(USER_NAME) USERNAME=$(USERNAME)
+prom :
+	cd monitoring/prometheus; docker build -t $(USER_NAME)/prometheus .
+ui : 
+	export USER_NAME=$(USER_NAME); cd src/ui; bash docker_build.sh; cd -;
+post :
+	export USER_NAME=$(USER_NAME); cd src/post; bash docker_build.sh; cd -;
+comment :
+	export USER_NAME=$(USER_NAME); cd src/comment; bash docker_build.sh; cd -;
+exporters:
+	cd monitoring; \
+	cd node_exporter; docker build -t prom/node-exporter .; cd -; \
+	cd mongodb_exporter; docker build -t rimskiy/mongodb_exporter .; cd -; \
+	cd blackbox_exporter; docker build -t prom/blackbox-exporter .; cd -;
+compose :
+	cd docker; docker-compose up -d
+clean:
+	cd docker; docker-compose down
+```
