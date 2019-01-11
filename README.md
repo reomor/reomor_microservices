@@ -1453,3 +1453,251 @@ compose :
 clean:
 	cd docker; docker-compose down
 ```
+
+## HW19
+
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=monitoring-2)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/monitoring-2)
+
+### description
+
+Docker containers monitoring
+
+```
+docker-compose up -d
+docker-compose -f docker-compose-monitoring.yml up -d
+```
+create firewall rule for cadvance in GCP
+```
+gcloud compute firewall-rules create default-cadviser \
+--allow tcp:8080 \
+--target-tags=docker-machine \
+--description="Allow 8080 connections" \
+--direction=INGRESS
+```
+split docker-compose, from '3.5' networks can use custom name
+```
+version: '3.5'
+services:
+
+  post_db:
+    image: mongo:${MONGO_IMAGE_VERSION}
+    volumes:
+      - post_db:/data/db
+    networks:
+      back_net:
+         aliases:
+           - mongodb
+           - post_db
+           - comment_db
+
+  ui:
+    image: ${USER_NAME}/ui:${UI_SERVICE_VERSION}
+    ports:
+      - ${UI_PUBLICATION_PORT}:9292/tcp
+    networks:
+      - front_net
+
+  post:
+    image: ${USER_NAME}/post:${POST_SERVICE_VERSION}
+    networks:
+      front_net:
+        aliases:
+          - post
+      back_net:
+        aliases:
+          - post
+
+  comment:
+    image: ${USER_NAME}/comment:${COMMENT_SERVICE_VERSION}
+    networks:
+      front_net:
+        aliases:
+          - comment
+      back_net:
+        aliases:
+          - comment
+
+volumes:
+  post_db:
+
+networks:
+  back_net:
+    name: back_net
+    ipam:
+      config:
+      - subnet: 10.0.2.0/24
+  front_net:
+    name: front_net
+    ipam:
+      config:
+      - subnet: 10.0.1.0/24
+```
+monitoring
+```
+version: '3.5'
+services:
+  prometheus:
+    image: ${USER_NAME}/prometheus
+    ports:
+      - '9090:9090'
+    volumes:
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention=1d'
+    networks:
+      front_net:
+        aliases:
+          - prometheus
+      back_net:
+        aliases:
+          - prometheus
+  
+  cadvisor:
+    image: google/cadvisor:v0.29.0
+    volumes:
+      - '/:/rootfs:ro'
+      - '/var/run:/var/run:rw'
+      - '/sys:/sys:ro'
+      - '/var/lib/docker/:/var/lib/docker:ro'
+    ports:
+      - '8080:8080'
+    networks:
+      front_net:
+        aliases:
+          - cadvisor
+      back_net:
+        aliases:
+          - cadvisor
+  
+  node-exporter:
+    image: prom/node-exporter:v0.15.2
+    user: root
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.ignored-mount-points="^/(sys|proc|dev|host|etc)($$|/)"'
+    networks:
+      front_net:
+        aliases:
+          - node-exporter
+      back_net:
+        aliases:
+          - node-exporter
+    
+  mongodb_exporter:
+    image: rimskiy/mongodb_exporter:latest
+    user: root
+    command:
+      - '-mongodb.uri=mongodb://mongodb:27017'
+      - '-web.listen-address=mongodb-exporter:9104'
+    networks:
+      back_net:
+        aliases:
+          - mongodb-exporter
+  
+  blackbox_exporter:
+    image: prom/blackbox-exporter:latest
+    user: root
+    ports:
+      - '9115:9115'
+    networks:
+      front_net:
+        aliases:
+          - blackbox-exporter
+      back_net:
+        aliases:
+          - blackbox-exporter
+
+volumes:
+  prometheus_data:
+
+networks:
+  front_net:
+    external: true
+  back_net:
+    external: true
+```
+create firewall rule for grafana in GCP
+```
+gcloud compute firewall-rules create default-grafana \
+--allow tcp:3000 \
+--target-tags=docker-machine \
+--description="Allow grafana connections" \
+--direction=INGRESS
+```
+grafana
+```
+...
+grafana:
+    image: grafana/grafana:5.0.0
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=secret
+    depends_on:
+      - prometheus
+    ports:
+      - 3000:3000
+    networks:
+      front_net:
+        aliases:
+          - grafana
+      back_net:
+        aliases:
+          - grafana
+...
+```
+grafana queries
+```
+rate(ui_request_count{http_status=~"^[45].*"}[1m])
+rate(ui_request_count[1m])
+histogram_quantile(0.95, sum(rate(ui_request_latency_seconds_bucket[5m])) by (le))
+rate(post_count[1h])
+rate(comment_count[1h])
+```
+create firewall rule for alertmanager in GCP
+```
+gcloud compute firewall-rules create default-alertmanager \
+--allow tcp:9093 \
+--target-tags=docker-machine \
+--description="Allow alertmanager connections" \
+--direction=INGRESS
+```
+alertmanager
+```
+...
+alertmanager:
+    image: ${USER_NAME}/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/config.yml'
+    port:
+      - '9093:9093'
+    networks:
+      front_net:
+        aliases:
+          - alertmanager
+      back_net:
+        aliases:
+          - alertmanager
+...
+```
+alertmanager config in Dockerfile
+```
+global:
+  slack_api_url: 'https://hooks.slack.com/services/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'
+
+route:
+  receiver: 'slack-notifications'
+
+receivers:
+- name: 'slack-notifications'
+  slack_configs:
+  - channel: '#my_channel'
+```
