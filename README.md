@@ -1810,3 +1810,188 @@ to start elasticsearch run on GCP host
 ```
 sudo sysctl -w vm.max_map_count=262144
 ```
+
+docker-compose.yml
+```
+version: '3.5'
+services:
+
+  post_db:
+    image: mongo:${MONGO_IMAGE_VERSION}
+    volumes:
+      - post_db:/data/db
+    networks:
+      back_net:
+         aliases:
+           - mongodb
+           - post_db
+           - comment_db
+
+  ui:
+    image: ${USER_NAME}/ui:${UI_SERVICE_VERSION}
+    ports:
+      - ${UI_PUBLICATION_PORT}:9292/tcp
+    networks:
+      - front_net
+
+  post:
+    image: ${USER_NAME}/post:${POST_SERVICE_VERSION}
+    environment:
+      - POST_DATABASE_HOST=post_db
+      - POST_DATABASE=posts
+    depends_on:
+      - post_db
+    ports:
+      - "5000:5000"
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: service.post
+    networks:
+      front_net:
+        aliases:
+          - post
+      back_net:
+        aliases:
+          - post
+   
+
+  comment:
+    image: ${USER_NAME}/comment:${COMMENT_SERVICE_VERSION}
+    networks:
+      front_net:
+        aliases:
+          - comment
+      back_net:
+        aliases:
+          - comment
+
+volumes:
+  post_db:
+
+networks:
+  back_net:
+    name: back_net
+    ipam:
+      config:
+      - subnet: 10.0.2.0/24
+  front_net:
+    name: front_net
+    ipam:
+      config:
+      - subnet: 10.0.1.0/24
+```
+
+docker-compose-logging.yml
+```
+version: '3.5'
+services:
+  fluentd:
+    image: ${USER_NAME}/fluentd
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+    networks:
+      front_net:
+      back_net:
+
+  elasticsearch:
+    image: elasticsearch:6.5.4
+    expose:
+      - 9200
+    ports:
+      - "9200:9200"
+    networks:
+      front_net:
+        aliases:
+          - elasticsearch
+      back_net:
+        aliases:
+          - elasticsearch
+
+  kibana:
+    image: kibana:6.5.4
+    ports:
+      - "5601:5601"
+    networks:
+      front_net:
+        aliases:
+          - kibana
+      back_net:
+        aliases:
+          - kibana
+networks:
+  back_net:
+    name: back_net
+    ipam:
+      config:
+      - subnet: 10.0.2.0/24
+  front_net:
+    name: front_net
+    ipam:
+      config:
+      - subnet: 10.0.1.0/24
+```
+
+fluentd Dockerfile
+```
+FROM fluent/fluentd:v0.12
+RUN gem install fluent-plugin-elasticsearch --no-rdoc --no-ri --version 1.9.5
+RUN gem install fluent-plugin-grok-parser --no-rdoc --no-ri --version 1.0.0
+ADD fluent.conf /fluentd/etc
+```
+
+fluent.conf
+```
+<source>
+  @type forward
+  port 24224
+  bind 0.0.0.0
+</source>
+
+<filter service.post>
+  @type parser
+  format json
+  key_name log
+</filter>
+
+<match *.**>
+  @type copy
+  <store>
+    @type elasticsearch
+    host elasticsearch
+    port 9200
+    logstash_format true
+    logstash_prefix fluentd
+    logstash_dateformat %Y%m%d
+    include_tag_key true
+    type_name access_log
+    tag_key @log_name
+    flush_interval 1s
+  </store>
+  <store>
+    @type stdout
+  </store>
+</match>
+```
+
+add logging for ui
+```
+ui:
+    image: ${USER_NAME}/ui:${UI_SERVICE_VERSION}
+    ports:
+      - ${UI_PUBLICATION_PORT}:9292/tcp
+    networks:
+      - front_net
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: service.ui
+```
+```
+docker-compose stop ui
+docker-compose rm ui
+docker-compose up -d
+```
