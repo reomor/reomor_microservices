@@ -1780,3 +1780,28 @@ create image from /logging/fluentd/Dockerfile
 ```
 docker build -t $USER_NAME/fluentd .
 ```
+
+docker/docker-compose.yml
+```
+post:
+    image: ${USER_NAME}/post:${POST_SERVICE_VERSION}
+    networks:
+      front_net:
+        aliases:
+          - post
+      back_net:
+        aliases:
+          - post
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: service.post
+```
+restart infra
+```
+docker-compose -f docker-compose-logging.yml up -d
+docker-compose down
+docker-compose up -d
+docker-compose logs -f post
+```

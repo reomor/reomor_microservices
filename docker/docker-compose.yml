@@ -28,6 +28,11 @@ services:
       back_net:
         aliases:
           - post
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: service.post
 
   comment:
     image: ${USER_NAME}/comment:${COMMENT_SERVICE_VERSION}
@@ -43,13 +48,7 @@ volumes:
   post_db:
 
 networks:
-  back_net:
-    name: back_net
-    ipam:
-      config:
-      - subnet: 10.0.2.0/24
   front_net:
-    name: front_net
-    ipam:
-      config:
-      - subnet: 10.0.1.0/24
+    external: true
+  back_net:
+    external: true
