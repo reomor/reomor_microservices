@@ -1804,4 +1804,9 @@ docker-compose -f docker-compose-logging.yml up -d
 docker-compose down
 docker-compose up -d
 docker-compose logs -f post
+docker-compose -f docker-compose-logging.yml ps
+```
+to start elasticsearch run on GCP host
+```
+sudo sysctl -w vm.max_map_count=262144
 ```
