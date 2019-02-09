@@ -1994,4 +1994,8 @@ ui:
 docker-compose stop ui
 docker-compose rm ui
 docker-compose up -d
+
+docker-compose -f docker-compose-logging.yml stop fluentd
+docker-compose -f docker-compose-logging.yml rm fluentd
+docker-compose -f docker-compose-logging.yml up -d fluentd
 ```
