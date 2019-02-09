@@ -1719,3 +1719,64 @@ docker-machine create --driver google \
 --google-open-port 9411/tcp \
  logging
 ```
+
+switch to logging
+```
+eval $(docker-machine env logging)
+```
+
+docker-compose-logging.yml
+```
+version: '3'
+services:
+  fluentd:
+    image: ${USERNAME}/fluentd
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+
+  elasticsearch:
+    image: elasticsearch
+    expose:
+      - 9200
+    ports:
+      - "9200:9200"
+
+  kibana:
+    image: kibana
+    ports:
+      - "5601:5601"
+```
+
+fluent.conf
+```
+<source>
+  @type forward
+  port 24224
+  bind 0.0.0.0
+</source>
+
+<match *.**>
+  @type copy
+  <store>
+    @type elasticsearch
+    host elasticsearch
+    port 9200
+    logstash_format true
+    logstash_prefix fluentd
+    logstash_dateformat %Y%m%d
+    include_tag_key true
+    type_name access_log
+    tag_key @log_name
+    flush_interval 1s
+  </store>
+  <store>
+    @type stdout
+  </store>
+</match>
+```
+
+create image from /logging/fluentd/Dockerfile
+```
+docker build -t $USER_NAME/fluentd .
+```
