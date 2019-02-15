@@ -3180,3 +3180,9 @@ gcloud -q compute firewall-rules delete \
   gcloud -q compute networks delete kubernetes-the-hard-way
 }
 ```
+
+## HW22
+
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=kubernetes-2)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/kubernetes-2)
+
+### description
