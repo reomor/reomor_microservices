@@ -1999,3 +1999,10 @@ docker-compose -f docker-compose-logging.yml stop fluentd
 docker-compose -f docker-compose-logging.yml rm fluentd
 docker-compose -f docker-compose-logging.yml up -d fluentd
 ```
+
+## HW21
+
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=kubernetes-1)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/kubernetes-1)
+
+### description
+
