@@ -2093,13 +2093,12 @@ or
 kubectl apply -f ./kubernetes/<directory>
 ubectl get deployment
 ```
-
 Forward ports
 ```
 kubectl get pods --selector component=ui
-kubectl port-forward <pod-name> 8080:9292 // 8080 ext - 9292 int
-```
+kubectl port-forward <pod-name> 8080:9292 // 8080 ext - 9292
 
+```
 comment-deployment.yml
 ```
 ---
@@ -2127,9 +2126,41 @@ spec:
       - image: rimskiy/comment
         name: comment
 ```
-
 Forward ports
 ```
 kubectl get pods --selector component=comment
 kubectl port-forward <pod-name> 9292:9292
+```
+
+post-deployment.yml
+```
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: post
+  labels:
+    app: reddit
+    component: post
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: reddit
+      component: post
+  template:
+    metadata:
+      name: post
+      labels:
+        app: reddit
+        component: post
+    spec:
+      containers:
+      - image: rimskiy/post
+        name: post
+```
+Forward ports
+```
+kubectl get pods --selector component=comment
+kubectl port-forward <pod-name> 5000:5000
 ```
