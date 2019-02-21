@@ -2165,7 +2165,7 @@ kubectl get pods --selector component=comment
 kubectl port-forward <pod-name> 5000:5000
 ```
 
-comment service
+comment-service.yml
 ```
 ---
 apiVersion: v1
@@ -2189,4 +2189,47 @@ spec:
 kubectl describe service comment | grep Endpoints
 sudo apt-get install dnsutils
 kubectl exec -ti <pod-name> nslookup comment
+```
+
+post-service.yml
+```
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: post
+  labels:
+    app: reddit
+    component: post
+spec:
+  ports:
+  - port: 5000
+    protocol: TCP
+    targetPort: 5000
+  selector:
+    app: reddit
+    component: post
+```
+
+mongodb-service.yml
+```
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  labels:
+    app: reddit
+    component: mongo
+spec:
+  ports:
+  - port: 27017
+    protocol: TCP
+    targetPort: 27017
+  selector:
+    app: reddit
+    component: mongo
+```
+```
+kubectl apply -f mongodb-service.yml
 ```
