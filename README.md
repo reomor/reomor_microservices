@@ -2096,9 +2096,9 @@ ubectl get deployment
 Forward ports
 ```
 kubectl get pods --selector component=ui
-kubectl port-forward <pod-name> 8080:9292 // 8080 ext - 9292
-
+kubectl port-forward <pod-name> 8080:9292 ### 8080 ext - 9292 int
 ```
+
 comment-deployment.yml
 ```
 ---
@@ -2163,4 +2163,30 @@ Forward ports
 ```
 kubectl get pods --selector component=comment
 kubectl port-forward <pod-name> 5000:5000
+```
+
+comment service
+```
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: comment # DNS record
+  labels:
+    app: reddit
+    component: comment
+spec:
+  ports:
+  - port: 9292 # request to comment:9292 from POD internally
+    protocol: TCP
+    targetPort: 9292 # redirects to 9292
+  selector: # select POD
+    app: reddit
+    component: comment
+```
+
+```
+kubectl describe service comment | grep Endpoints
+sudo apt-get install dnsutils
+kubectl exec -ti <pod-name> nslookup comment
 ```
