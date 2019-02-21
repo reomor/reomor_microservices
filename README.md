@@ -2097,5 +2097,39 @@ ubectl get deployment
 Forward ports
 ```
 kubectl get pods --selector component=ui
-kubectl port-forward <pod-name> 8080:9292
+kubectl port-forward <pod-name> 8080:9292 // 8080 ext - 9292 int
+```
+
+comment-deployment.yml
+```
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: comment
+  labels:
+    app: reddit
+    component: comment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: reddit
+      component: comment
+  template:
+    metadata:
+      name: comment
+      labels:
+        app: reddit
+        component: comment
+    spec:
+      containers:
+      - image: rimskiy/comment
+        name: comment
+```
+
+Forward ports
+```
+kubectl get pods --selector component=comment
+kubectl port-forward <pod-name> 9292:9292
 ```
