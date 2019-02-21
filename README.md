@@ -2016,11 +2016,86 @@ docker-compose -f docker-compose-logging.yml up -d fluentd
 ### description
 
 
-Install kubectl
+(Install kubectl)[https://kubernetes.io/docs/tasks/tools/install-kubectl/]
 ```
 sudo apt-get update && sudo apt-get install -y apt-transport-https
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
 echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee -a /etc/apt/sources.list.d/kubernetes.list
 sudo apt-get update
 sudo apt-get install -y kubectl
+```
+
+Install local hypervisor
+```
+KVM or VirtualBox
+```
+
+Install Minikube
+```
+curl -Lo minikube https://storage.googleapis.com/minikube/releases/v0.34.1/minikube-linux-amd64 \
+  && chmod +x minikube && sudo mv minikube /usr/local/bin/
+```
+
+Start minicube
+```
+minikube start --kubernetes-version <version> --vm-driver=<hypervisor>
+kubectl get nodes
+```
+
+Usual kubectl config order
+```
+kubectl config set-cluster ... cluster_name
+kubectl config set-credentials ... user_name
+kubectl config set-context context_name \
+--cluster=cluster_name \
+--user=user_name
+kubectl config use-context context_name
+```
+
+Contexts
+```
+kubectl config current-context
+kubectl config get-contexts
+```
+
+ui-deployment.yml
+```
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: ui
+  labels:
+    app: reddit
+    component: ui
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: reddit
+      component: ui
+  template:
+    metadata:
+      name: ui-pod
+      labels:
+        app: reddit
+        component: ui
+    spec:
+      containers:
+      - image: rimskiy/ui
+        name: ui
+```
+
+Run deployment
+```
+kubectl apply -f ui-deployment.yml
+or
+kubectl apply -f ./kubernetes/<directory>
+ubectl get deployment
+```
+
+Forward ports
+```
+kubectl get pods --selector component=ui
+kubectl port-forward <pod-name> 8080:9292
 ```
