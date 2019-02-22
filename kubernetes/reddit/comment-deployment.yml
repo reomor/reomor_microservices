@@ -23,3 +23,6 @@ spec:
       - image: rimskiy/comment
         name: comment
         imagePullPolicy: IfNotPresent
+        env:
+        - name: COMMENT_DATABASE_HOST
+          value: comment-db

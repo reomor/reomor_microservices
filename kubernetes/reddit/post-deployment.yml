@@ -23,3 +23,6 @@ spec:
       - image: rimskiy/post
         name: post
         imagePullPolicy: IfNotPresent
+        env:
+        - name: POST_DATABASE_HOST
+          value: post-db
