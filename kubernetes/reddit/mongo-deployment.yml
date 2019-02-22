@@ -22,6 +22,7 @@ spec:
       containers:
       - image: mongo:3.2
         name: mongo
+        imagePullPolicy: IfNotPresent
         volumeMounts:
         - name: mongo-persistent-storage
           mountPath: /data/db

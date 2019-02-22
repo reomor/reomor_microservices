@@ -7,7 +7,7 @@ metadata:
     app: reddit
     component: post
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: reddit
@@ -22,3 +22,4 @@ spec:
       containers:
       - image: rimskiy/post
         name: post
+        imagePullPolicy: IfNotPresent

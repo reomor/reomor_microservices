@@ -7,7 +7,7 @@ metadata:
     app: reddit
     component: comment
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: reddit
@@ -22,3 +22,4 @@ spec:
       containers:
       - image: rimskiy/comment
         name: comment
+        imagePullPolicy: IfNotPresent

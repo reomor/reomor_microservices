@@ -2231,5 +2231,35 @@ spec:
     component: mongo
 ```
 ```
+sudo docker run -d -p 4000:5000 --restart=always --name myregistry registry:2
+docker tag 06c354345a09 localhost:4000/rimskiy/ui
+docker push localhost:5000/rimskiy/ui
+docker pull localhost:5000/rimskiy/ui
+```
+```
+minikube start --memory 4096 --insecure-registry=localhost:4000
+eval $(minikube docker-env)
+docker pull rimskiy/ui
+kubectl apply -f mongo-deployment.yml
 kubectl apply -f mongodb-service.yml
+kubectl apply -f comment-deployment.yml
+kubectl apply -f comment-service.yml
+kubectl apply -f ui-deployment.yml
+kubectl apply -f ui-service.yml
+kubectl port-forward ui-7ccfddd67c-97fp4 9292:9292
+kubectl logs post-854b778cd9-cxntp
+```
+userful commands
+```
+kubectl get pods --selector component=ui
+kubectl describe pod comment-8468c88dd7-dtwvg
+kubectl delete pods ui-7ccfddd67c-457kv
+kubectl get pod,svc -n kube-system
+kubectl delete service hello-node
+kubectl delete deployment hello-node
+```
+minikube docker
+```
+eval $(minikube docker-env)
+eval $(minikube docker-env --unset)
 ```
