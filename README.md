@@ -2291,3 +2291,29 @@ spec:
 minikube service ui
 minikube service list
 ```
+
+Addons
+```
+minikube addons list
+minikube addons enable dashboard
+kubectl get pods
+kubectl get all -n kube-system --selector k8s-app=kubernetes-dashboard
+minikube service kubernetes-dashboard -n kube-system
+minikube dashboard
+kubectl create -f https://raw.githubusercontent.com/kubernetes/dashboard/master/aio/deploy/recommended/kubernetes-dashboard.yaml
+kubectl proxy
+```
+
+Create dev namespace
+```
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+```
+```
+kubectl apply -f dev-namespace.yml
+kubectl apply -n dev -f .
+minikube service ui -n dev
+```
