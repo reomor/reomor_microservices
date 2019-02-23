@@ -2263,3 +2263,31 @@ minikube docker
 eval $(minikube docker-env)
 eval $(minikube docker-env --unset)
 ```
+
+ClusterIP - only inside cluster
+NodePort - on node opens port in range 30000-32767 and redirects from NodeIP:NodePort to targetPort
+```
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui
+  labels:
+    app: reddit
+    component: ui
+spec:
+  type: NodePort
+  ports:  
+  - nodePort: 32092
+    port: 9292
+    protocol: TCP
+    targetPort: 9292
+  selector:
+    app: reddit
+    component: ui
+```
+
+```
+minikube service ui
+minikube service list
+```
