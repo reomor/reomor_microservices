@@ -2317,3 +2317,41 @@ kubectl apply -f dev-namespace.yml
 kubectl apply -n dev -f .
 minikube service ui -n dev
 ```
+
+Add information about environment in container
+ui-deployment.yml
+```
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: ui
+  labels:
+    app: reddit
+    component: ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: reddit
+      component: ui
+  template:
+    metadata:
+      name: ui-pod
+      labels:
+        app: reddit
+        component: ui
+    spec:
+      containers:
+      - image: rimskiy/ui
+        name: ui
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: ENV
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+```
+```
+kubectl apply -f ui-deployment.yml -n dev
+```

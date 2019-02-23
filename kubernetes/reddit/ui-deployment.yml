@@ -23,3 +23,8 @@ spec:
       - image: rimskiy/ui
         name: ui
         imagePullPolicy: IfNotPresent
+        env:
+        - name: ENV
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
