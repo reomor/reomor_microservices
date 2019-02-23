@@ -2355,3 +2355,23 @@ spec:
 ```
 kubectl apply -f ui-deployment.yml -n dev
 ```
+
+GKE
+```
+gcloud container clusters get-credentials your-first-cluster-1 --zone europe-west4-a --project docker-225016
+kubectl config current-context
+kubectl apply -f dev-namespace.yml
+kubectl apply -f . -n dev
+```
+Add firewall rule in GCP
+```
+kubectl get nodes -o wide
+kubectl describe service ui -n dev | grep NodePort
+```
+
+Run dashboard
+```
+kubectl create clusterrolebinding kubernetes-dashboard  --clusterrole=cluster-admin --serviceaccount=kube-system:kubernetes-dashboard
+kubectl proxy
+http://localhost:8001/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/#!/overview?namespace=dev
+```
