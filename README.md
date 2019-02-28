@@ -2007,1176 +2007,371 @@ docker-compose -f docker-compose-logging.yml up -d fluentd
 ### description
 
 (Hard way install Kubernetes)[https://github.com/kelseyhightower/kubernetes-the-hard-way/]
+(One file copy)[kubernetes/README.md]
 
-Prerequirments
-```
-gcloud init
-gcloud config set compute/region europe-west4
-gcloud config set compute/zone europe-west4-a
-```
-Installing the Client Tools
-```
-wget -q --show-progress --https-only --timestamping \
-  https://pkg.cfssl.org/R1.2/cfssl_linux-amd64 \
-  https://pkg.cfssl.org/R1.2/cfssljson_linux-amd64
-chmod +x cfssl_linux-amd64 cfssljson_linux-amd64
-sudo mv cfssl_linux-amd64 /usr/local/bin/cfssl
-sudo mv cfssljson_linux-amd64 /usr/local/bin/cfssljson
-cfssl version
-```
-Kubernetes control
-```
-wget https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kubectl
-chmod +x kubectl
-sudo mv kubectl /usr/local/bin/
-kubectl version --client
-```
-Virtual Private Cloud Network
-```
-gcloud compute networks create kubernetes-the-hard-way --subnet-mode custom
-gcloud compute networks subnets create kubernetes \
-  --network kubernetes-the-hard-way \
-  --range 10.240.0.0/24
-gcloud compute firewall-rules create kubernetes-the-hard-way-allow-internal \
-  --allow tcp,udp,icmp \
-  --network kubernetes-the-hard-way \
-  --source-ranges 10.240.0.0/24,10.200.0.0/16
-gcloud compute firewall-rules create kubernetes-the-hard-way-allow-external \
-  --allow tcp:22,tcp:6443,icmp \
-  --network kubernetes-the-hard-way \
-  --source-ranges 0.0.0.0/0
-gcloud compute firewall-rules list --filter="network:kubernetes-the-hard-way"
-```
-Kubernetes Public IP Address
-```
-gcloud compute addresses create kubernetes-the-hard-way \
-  --region $(gcloud config get-value compute/region)
-gcloud compute addresses list --filter="name=('kubernetes-the-hard-way')"
-```
-Kubernetes Controllers
-```
-for i in 0 1 2; do
-  gcloud compute instances create controller-${i} \
-    --async \
-    --boot-disk-size 200GB \
-    --can-ip-forward \
-    --image-family ubuntu-1804-lts \
-    --image-project ubuntu-os-cloud \
-    --machine-type n1-standard-1 \
-    --private-network-ip 10.240.0.1${i} \
-    --scopes compute-rw,storage-ro,service-management,service-control,logging-write,monitoring \
-    --subnet kubernetes \
-    --tags kubernetes-the-hard-way,controller
-done
-```
-Kubernetes Workers
-```
-for i in 0 1 2; do
-  gcloud compute instances create worker-${i} \
-    --async \
-    --boot-disk-size 200GB \
-    --can-ip-forward \
-    --image-family ubuntu-1804-lts \
-    --image-project ubuntu-os-cloud \
-    --machine-type n1-standard-1 \
-    --metadata pod-cidr=10.200.${i}.0/24 \
-    --private-network-ip 10.240.0.2${i} \
-    --scopes compute-rw,storage-ro,service-management,service-control,logging-write,monitoring \
-    --subnet kubernetes \
-    --tags kubernetes-the-hard-way,worker
-done
-```
-Verfification
-```
-gcloud compute instances list
-```
-Configuring SSH Access
-```
-gcloud compute ssh controller-0
-exit
-```
-Certificate Authority
-```
-cat > ca-config.json <<EOF
-{
-  "signing": {
-    "default": {
-      "expiry": "8760h"
-    },
-    "profiles": {
-      "kubernetes": {
-        "usages": ["signing", "key encipherment", "server auth", "client auth"],
-        "expiry": "8760h"
-      }
-    }
-  }
-}
-EOF
-cat > ca-csr.json <<EOF
-{
-  "CN": "Kubernetes",
-  "key": {
-    "algo": "rsa",
-    "size": 2048
-  },
-  "names": [
-    {
-      "C": "US",
-      "L": "Portland",
-      "O": "Kubernetes",
-      "OU": "CA",
-      "ST": "Oregon"
-    }
-  ]
-}
-EOF
-cfssl gencert -initca ca-csr.json | cfssljson -bare ca
-```
-The Admin Client Certificate
-```
-cat > admin-csr.json <<EOF
-{
-  "CN": "admin",
-  "key": {
-    "algo": "rsa",
-    "size": 2048
-  },
-  "names": [
-    {
-      "C": "US",
-      "L": "Portland",
-      "O": "system:masters",
-      "OU": "Kubernetes The Hard Way",
-      "ST": "Oregon"
-    }
-  ]
-}
-EOF
-cfssl gencert \
-  -ca=ca.pem \
-  -ca-key=ca-key.pem \
-  -config=ca-config.json \
-  -profile=kubernetes \
-  admin-csr.json | cfssljson -bare admin
-```
-The Kubelet Client Certificates
-```
-for instance in worker-0 worker-1 worker-2; do
-cat > ${instance}-csr.json <<EOF
-{
-  "CN": "system:node:${instance}",
-  "key": {
-    "algo": "rsa",
-    "size": 2048
-  },
-  "names": [
-    {
-      "C": "US",
-      "L": "Portland",
-      "O": "system:nodes",
-      "OU": "Kubernetes The Hard Way",
-      "ST": "Oregon"
-    }
-  ]
-}
-EOF
-
-EXTERNAL_IP=$(gcloud compute instances describe ${instance} \
-  --format 'value(networkInterfaces[0].accessConfigs[0].natIP)')
-
-INTERNAL_IP=$(gcloud compute instances describe ${instance} \
-  --format 'value(networkInterfaces[0].networkIP)')
-
-cfssl gencert \
-  -ca=ca.pem \
-  -ca-key=ca-key.pem \
-  -config=ca-config.json \
-  -hostname=${instance},${EXTERNAL_IP},${INTERNAL_IP} \
-  -profile=kubernetes \
-  ${instance}-csr.json | cfssljson -bare ${instance}
-done
-```
-The Controller Manager Client Certificate
-```
-{
-
-cat > kube-controller-manager-csr.json <<EOF
-{
-  "CN": "system:kube-controller-manager",
-  "key": {
-    "algo": "rsa",
-    "size": 2048
-  },
-  "names": [
-    {
-      "C": "US",
-      "L": "Portland",
-      "O": "system:kube-controller-manager",
-      "OU": "Kubernetes The Hard Way",
-      "ST": "Oregon"
-    }
-  ]
-}
-EOF
-
-cfssl gencert \
-  -ca=ca.pem \
-  -ca-key=ca-key.pem \
-  -config=ca-config.json \
-  -profile=kubernetes \
-  kube-controller-manager-csr.json | cfssljson -bare kube-controller-manager
-
-}
-```
-The Kube Proxy Client Certificate
-```
-{
-
-cat > kube-proxy-csr.json <<EOF
-{
-  "CN": "system:kube-proxy",
-  "key": {
-    "algo": "rsa",
-    "size": 2048
-  },
-  "names": [
-    {
-      "C": "US",
-      "L": "Portland",
-      "O": "system:node-proxier",
-      "OU": "Kubernetes The Hard Way",
-      "ST": "Oregon"
-    }
-  ]
-}
-EOF
-
-cfssl gencert \
-  -ca=ca.pem \
-  -ca-key=ca-key.pem \
-  -config=ca-config.json \
-  -profile=kubernetes \
-  kube-proxy-csr.json | cfssljson -bare kube-proxy
-
-}
-```
-The Scheduler Client Certificate
-```
-{
-
-cat > kube-scheduler-csr.json <<EOF
-{
-  "CN": "system:kube-scheduler",
-  "key": {
-    "algo": "rsa",
-    "size": 2048
-  },
-  "names": [
-    {
-      "C": "US",
-      "L": "Portland",
-      "O": "system:kube-scheduler",
-      "OU": "Kubernetes The Hard Way",
-      "ST": "Oregon"
-    }
-  ]
-}
-EOF
-
-cfssl gencert \
-  -ca=ca.pem \
-  -ca-key=ca-key.pem \
-  -config=ca-config.json \
-  -profile=kubernetes \
-  kube-scheduler-csr.json | cfssljson -bare kube-scheduler
-
-}
-```
-The Kubernetes API Server Certificate
-```
-{
-
-KUBERNETES_PUBLIC_ADDRESS=$(gcloud compute addresses describe kubernetes-the-hard-way \
-  --region $(gcloud config get-value compute/region) \
-  --format 'value(address)')
-
-cat > kubernetes-csr.json <<EOF
-{
-  "CN": "kubernetes",
-  "key": {
-    "algo": "rsa",
-    "size": 2048
-  },
-  "names": [
-    {
-      "C": "US",
-      "L": "Portland",
-      "O": "Kubernetes",
-      "OU": "Kubernetes The Hard Way",
-      "ST": "Oregon"
-    }
-  ]
-}
-EOF
-
-cfssl gencert \
-  -ca=ca.pem \
-  -ca-key=ca-key.pem \
-  -config=ca-config.json \
-  -hostname=10.32.0.1,10.240.0.10,10.240.0.11,10.240.0.12,${KUBERNETES_PUBLIC_ADDRESS},127.0.0.1,kubernetes.default \
-  -profile=kubernetes \
-  kubernetes-csr.json | cfssljson -bare kubernetes
-
-}
-```
-The Service Account Key Pair
-```
-{
-
-cat > service-account-csr.json <<EOF
-{
-  "CN": "service-accounts",
-  "key": {
-    "algo": "rsa",
-    "size": 2048
-  },
-  "names": [
-    {
-      "C": "US",
-      "L": "Portland",
-      "O": "Kubernetes",
-      "OU": "Kubernetes The Hard Way",
-      "ST": "Oregon"
-    }
-  ]
-}
-EOF
-
-cfssl gencert \
-  -ca=ca.pem \
-  -ca-key=ca-key.pem \
-  -config=ca-config.json \
-  -profile=kubernetes \
-  service-account-csr.json | cfssljson -bare service-account
-
-}
-```
-Distribute the Client and Server Certificates
-```
-for instance in worker-0 worker-1 worker-2; do
-  gcloud compute scp ca.pem ${instance}-key.pem ${instance}.pem ${instance}:~/
-done
-for instance in controller-0 controller-1 controller-2; do
-  gcloud compute scp ca.pem ca-key.pem kubernetes-key.pem kubernetes.pem \
-    service-account-key.pem service-account.pem ${instance}:~/
-done
-```
-Kubernetes Public IP Address
-```
-KUBERNETES_PUBLIC_ADDRESS=$(gcloud compute addresses describe kubernetes-the-hard-way \
-  --region $(gcloud config get-value compute/region) \
-  --format 'value(address)')
-```
-The kubelet Kubernetes Configuration File
-```
-for instance in worker-0 worker-1 worker-2; do
-  kubectl config set-cluster kubernetes-the-hard-way \
-    --certificate-authority=ca.pem \
-    --embed-certs=true \
-    --server=https://${KUBERNETES_PUBLIC_ADDRESS}:6443 \
-    --kubeconfig=${instance}.kubeconfig
-
-  kubectl config set-credentials system:node:${instance} \
-    --client-certificate=${instance}.pem \
-    --client-key=${instance}-key.pem \
-    --embed-certs=true \
-    --kubeconfig=${instance}.kubeconfig
-
-  kubectl config set-context default \
-    --cluster=kubernetes-the-hard-way \
-    --user=system:node:${instance} \
-    --kubeconfig=${instance}.kubeconfig
-
-  kubectl config use-context default --kubeconfig=${instance}.kubeconfig
-done
-```
-The kube-proxy Kubernetes Configuration File
-```
-{
-  kubectl config set-cluster kubernetes-the-hard-way \
-    --certificate-authority=ca.pem \
-    --embed-certs=true \
-    --server=https://${KUBERNETES_PUBLIC_ADDRESS}:6443 \
-    --kubeconfig=kube-proxy.kubeconfig
-
-  kubectl config set-credentials system:kube-proxy \
-    --client-certificate=kube-proxy.pem \
-    --client-key=kube-proxy-key.pem \
-    --embed-certs=true \
-    --kubeconfig=kube-proxy.kubeconfig
-
-  kubectl config set-context default \
-    --cluster=kubernetes-the-hard-way \
-    --user=system:kube-proxy \
-    --kubeconfig=kube-proxy.kubeconfig
-
-  kubectl config use-context default --kubeconfig=kube-proxy.kubeconfig
-}
-```
-The kube-controller-manager Kubernetes Configuration File
-```
-{
-  kubectl config set-cluster kubernetes-the-hard-way \
-    --certificate-authority=ca.pem \
-    --embed-certs=true \
-    --server=https://127.0.0.1:6443 \
-    --kubeconfig=kube-controller-manager.kubeconfig
-
-  kubectl config set-credentials system:kube-controller-manager \
-    --client-certificate=kube-controller-manager.pem \
-    --client-key=kube-controller-manager-key.pem \
-    --embed-certs=true \
-    --kubeconfig=kube-controller-manager.kubeconfig
-
-  kubectl config set-context default \
-    --cluster=kubernetes-the-hard-way \
-    --user=system:kube-controller-manager \
-    --kubeconfig=kube-controller-manager.kubeconfig
-
-  kubectl config use-context default --kubeconfig=kube-controller-manager.kubeconfig
-}
-```
-The kube-scheduler Kubernetes Configuration File
-```
-{
-  kubectl config set-cluster kubernetes-the-hard-way \
-    --certificate-authority=ca.pem \
-    --embed-certs=true \
-    --server=https://127.0.0.1:6443 \
-    --kubeconfig=kube-scheduler.kubeconfig
-
-  kubectl config set-credentials system:kube-scheduler \
-    --client-certificate=kube-scheduler.pem \
-    --client-key=kube-scheduler-key.pem \
-    --embed-certs=true \
-    --kubeconfig=kube-scheduler.kubeconfig
+## HW22
 
-  kubectl config set-context default \
-    --cluster=kubernetes-the-hard-way \
-    --user=system:kube-scheduler \
-    --kubeconfig=kube-scheduler.kubeconfig
+[![Build Status](https://api.travis-ci.com/Otus-DevOps-2018-09/reomor_microservices.svg?branch=kubernetes-2)](https://github.com/Otus-DevOps-2018-09/reomor_microservices/tree/kubernetes-2)
 
-  kubectl config use-context default --kubeconfig=kube-scheduler.kubeconfig
-}
-```
-The admin Kubernetes Configuration File
-```
-{
-  kubectl config set-cluster kubernetes-the-hard-way \
-    --certificate-authority=ca.pem \
-    --embed-certs=true \
-    --server=https://127.0.0.1:6443 \
-    --kubeconfig=admin.kubeconfig
-
-  kubectl config set-credentials admin \
-    --client-certificate=admin.pem \
-    --client-key=admin-key.pem \
-    --embed-certs=true \
-    --kubeconfig=admin.kubeconfig
-
-  kubectl config set-context default \
-    --cluster=kubernetes-the-hard-way \
-    --user=admin \
-    --kubeconfig=admin.kubeconfig
-
-  kubectl config use-context default --kubeconfig=admin.kubeconfig
-}
-```
-Distribute the Kubernetes Configuration Files
-```
-for instance in worker-0 worker-1 worker-2; do
-  gcloud compute scp ${instance}.kubeconfig kube-proxy.kubeconfig ${instance}:~/
-done
-for instance in controller-0 controller-1 controller-2; do
-  gcloud compute scp admin.kubeconfig kube-controller-manager.kubeconfig kube-scheduler.kubeconfig ${instance}:~/
-done
-```
-Generating the Data Encryption Config and Key
-```
-ENCRYPTION_KEY=$(head -c 32 /dev/urandom | base64)
-cat > encryption-config.yaml <<EOF
-kind: EncryptionConfig
-apiVersion: v1
-resources:
-  - resources:
-      - secrets
-    providers:
-      - aescbc:
-          keys:
-            - name: key1
-              secret: ${ENCRYPTION_KEY}
-      - identity: {}
-EOF
-for instance in controller-0 controller-1 controller-2; do
-  gcloud compute scp encryption-config.yaml ${instance}:~/
-done
-```
-Bootstrapping the etcd Cluster
-on each controller instance: controller-0, controller-1, and controller-2
-```
-gcloud compute ssh controller-0
-wget -q --show-progress --https-only --timestamping \
-  "https://github.com/coreos/etcd/releases/download/v3.3.9/etcd-v3.3.9-linux-amd64.tar.gz"
-{
-  tar -xvf etcd-v3.3.9-linux-amd64.tar.gz
-  sudo mv etcd-v3.3.9-linux-amd64/etcd* /usr/local/bin/
-}
-{
-  sudo mkdir -p /etc/etcd /var/lib/etcd
-  sudo cp ca.pem kubernetes-key.pem kubernetes.pem /etc/etcd/
-}
-INTERNAL_IP=$(curl -s -H "Metadata-Flavor: Google" \
-  http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/ip)
-ETCD_NAME=$(hostname -s)
-```
-```
-cat <<EOF | sudo tee /etc/systemd/system/etcd.service
-[Unit]
-Description=etcd
-Documentation=https://github.com/coreos
-
-[Service]
-ExecStart=/usr/local/bin/etcd \\
-  --name ${ETCD_NAME} \\
-  --cert-file=/etc/etcd/kubernetes.pem \\
-  --key-file=/etc/etcd/kubernetes-key.pem \\
-  --peer-cert-file=/etc/etcd/kubernetes.pem \\
-  --peer-key-file=/etc/etcd/kubernetes-key.pem \\
-  --trusted-ca-file=/etc/etcd/ca.pem \\
-  --peer-trusted-ca-file=/etc/etcd/ca.pem \\
-  --peer-client-cert-auth \\
-  --client-cert-auth \\
-  --initial-advertise-peer-urls https://${INTERNAL_IP}:2380 \\
-  --listen-peer-urls https://${INTERNAL_IP}:2380 \\
-  --listen-client-urls https://${INTERNAL_IP}:2379,https://127.0.0.1:2379 \\
-  --advertise-client-urls https://${INTERNAL_IP}:2379 \\
-  --initial-cluster-token etcd-cluster-0 \\
-  --initial-cluster controller-0=https://10.240.0.10:2380,controller-1=https://10.240.0.11:2380,controller-2=https://10.240.0.12:2380 \\
-  --initial-cluster-state new \\
-  --data-dir=/var/lib/etcd
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-```
-```
-{
-  sudo systemctl daemon-reload
-  sudo systemctl enable etcd
-  sudo systemctl start etcd
-}
-```
-Verification
-```
-sudo ETCDCTL_API=3 etcdctl member list \
-  --endpoints=https://127.0.0.1:2379 \
-  --cacert=/etc/etcd/ca.pem \
-  --cert=/etc/etcd/kubernetes.pem \
-  --key=/etc/etcd/kubernetes-key.pem
-```
-Bootstrapping the Kubernetes Control Plane
-on each controller instance: controller-0, controller-1, and controller-2
-```
-sudo mkdir -p /etc/kubernetes/config
-wget -q --show-progress --https-only --timestamping \
-  "https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kube-apiserver" \
-  "https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kube-controller-manager" \
-  "https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kube-scheduler" \
-  "https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kubectl"
-{
-  chmod +x kube-apiserver kube-controller-manager kube-scheduler kubectl
-  sudo mv kube-apiserver kube-controller-manager kube-scheduler kubectl /usr/local/bin/
-}
-{
-  sudo mkdir -p /var/lib/kubernetes/
-
-  sudo mv ca.pem ca-key.pem kubernetes-key.pem kubernetes.pem \
-    service-account-key.pem service-account.pem \
-    encryption-config.yaml /var/lib/kubernetes/
-}
-INTERNAL_IP=$(curl -s -H "Metadata-Flavor: Google" \
-  http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/ip)
-```
-```
-cat <<EOF | sudo tee /etc/systemd/system/kube-apiserver.service
-[Unit]
-Description=Kubernetes API Server
-Documentation=https://github.com/kubernetes/kubernetes
-
-[Service]
-ExecStart=/usr/local/bin/kube-apiserver \\
-  --advertise-address=${INTERNAL_IP} \\
-  --allow-privileged=true \\
-  --apiserver-count=3 \\
-  --audit-log-maxage=30 \\
-  --audit-log-maxbackup=3 \\
-  --audit-log-maxsize=100 \\
-  --audit-log-path=/var/log/audit.log \\
-  --authorization-mode=Node,RBAC \\
-  --bind-address=0.0.0.0 \\
-  --client-ca-file=/var/lib/kubernetes/ca.pem \\
-  --enable-admission-plugins=Initializers,NamespaceLifecycle,NodeRestriction,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota \\
-  --enable-swagger-ui=true \\
-  --etcd-cafile=/var/lib/kubernetes/ca.pem \\
-  --etcd-certfile=/var/lib/kubernetes/kubernetes.pem \\
-  --etcd-keyfile=/var/lib/kubernetes/kubernetes-key.pem \\
-  --etcd-servers=https://10.240.0.10:2379,https://10.240.0.11:2379,https://10.240.0.12:2379 \\
-  --event-ttl=1h \\
-  --experimental-encryption-provider-config=/var/lib/kubernetes/encryption-config.yaml \\
-  --kubelet-certificate-authority=/var/lib/kubernetes/ca.pem \\
-  --kubelet-client-certificate=/var/lib/kubernetes/kubernetes.pem \\
-  --kubelet-client-key=/var/lib/kubernetes/kubernetes-key.pem \\
-  --kubelet-https=true \\
-  --runtime-config=api/all \\
-  --service-account-key-file=/var/lib/kubernetes/service-account.pem \\
-  --service-cluster-ip-range=10.32.0.0/24 \\
-  --service-node-port-range=30000-32767 \\
-  --tls-cert-file=/var/lib/kubernetes/kubernetes.pem \\
-  --tls-private-key-file=/var/lib/kubernetes/kubernetes-key.pem \\
-  --v=2
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-```
-```
-sudo mv kube-controller-manager.kubeconfig /var/lib/kubernetes/
-cat <<EOF | sudo tee /etc/systemd/system/kube-controller-manager.service
-[Unit]
-Description=Kubernetes Controller Manager
-Documentation=https://github.com/kubernetes/kubernetes
-
-[Service]
-ExecStart=/usr/local/bin/kube-controller-manager \\
-  --address=0.0.0.0 \\
-  --cluster-cidr=10.200.0.0/16 \\
-  --cluster-name=kubernetes \\
-  --cluster-signing-cert-file=/var/lib/kubernetes/ca.pem \\
-  --cluster-signing-key-file=/var/lib/kubernetes/ca-key.pem \\
-  --kubeconfig=/var/lib/kubernetes/kube-controller-manager.kubeconfig \\
-  --leader-elect=true \\
-  --root-ca-file=/var/lib/kubernetes/ca.pem \\
-  --service-account-private-key-file=/var/lib/kubernetes/service-account-key.pem \\
-  --service-cluster-ip-range=10.32.0.0/24 \\
-  --use-service-account-credentials=true \\
-  --v=2
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-```
-```
-sudo mv kube-scheduler.kubeconfig /var/lib/kubernetes/
-cat <<EOF | sudo tee /etc/kubernetes/config/kube-scheduler.yaml
-apiVersion: componentconfig/v1alpha1
-kind: KubeSchedulerConfiguration
-clientConnection:
-  kubeconfig: "/var/lib/kubernetes/kube-scheduler.kubeconfig"
-leaderElection:
-  leaderElect: true
-EOF
-cat <<EOF | sudo tee /etc/systemd/system/kube-scheduler.service
-[Unit]
-Description=Kubernetes Scheduler
-Documentation=https://github.com/kubernetes/kubernetes
-
-[Service]
-ExecStart=/usr/local/bin/kube-scheduler \\
-  --config=/etc/kubernetes/config/kube-scheduler.yaml \\
-  --v=2
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-{
-  sudo systemctl daemon-reload
-  sudo systemctl enable kube-apiserver kube-controller-manager kube-scheduler
-  sudo systemctl start kube-apiserver kube-controller-manager kube-scheduler
-}
-```
-```
-sudo apt-get install -y nginx
-cat > kubernetes.default.svc.cluster.local <<EOF
-server {
-  listen      80;
-  server_name kubernetes.default.svc.cluster.local;
-
-  location /healthz {
-     proxy_pass                    https://127.0.0.1:6443/healthz;
-     proxy_ssl_trusted_certificate /var/lib/kubernetes/ca.pem;
-  }
-}
-EOF
-{
-  sudo mv kubernetes.default.svc.cluster.local \
-    /etc/nginx/sites-available/kubernetes.default.svc.cluster.local
+### description
 
-  sudo ln -s /etc/nginx/sites-available/kubernetes.default.svc.cluster.local /etc/nginx/sites-enabled/
-}
-sudo systemctl restart nginx
-sudo systemctl enable nginx
-```
-Verification
-```
-kubectl get componentstatuses --kubeconfig admin.kubeconfig
-curl -H "Host: kubernetes.default.svc.cluster.local" -i http://127.0.0.1/healthz
-```
-stop for each
-
-RBAC for Kubelet Authorization
-```
-gcloud compute ssh controller-0
-cat <<EOF | kubectl apply --kubeconfig admin.kubeconfig -f -
-apiVersion: rbac.authorization.k8s.io/v1beta1
-kind: ClusterRole
-metadata:
-  annotations:
-    rbac.authorization.kubernetes.io/autoupdate: "true"
-  labels:
-    kubernetes.io/bootstrapping: rbac-defaults
-  name: system:kube-apiserver-to-kubelet
-rules:
-  - apiGroups:
-      - ""
-    resources:
-      - nodes/proxy
-      - nodes/stats
-      - nodes/log
-      - nodes/spec
-      - nodes/metrics
-    verbs:
-      - "*"
-EOF
-cat <<EOF | kubectl apply --kubeconfig admin.kubeconfig -f -
-apiVersion: rbac.authorization.k8s.io/v1beta1
-kind: ClusterRoleBinding
-metadata:
-  name: system:kube-apiserver
-  namespace: ""
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: system:kube-apiserver-to-kubelet
-subjects:
-  - apiGroup: rbac.authorization.k8s.io
-    kind: User
-    name: kubernetes
-EOF
-```
-exit from controller-0
-Provision a Network Load Balancer
-```
-{
-  KUBERNETES_PUBLIC_ADDRESS=$(gcloud compute addresses describe kubernetes-the-hard-way \
-    --region $(gcloud config get-value compute/region) \
-    --format 'value(address)')
-
-  gcloud compute http-health-checks create kubernetes \
-    --description "Kubernetes Health Check" \
-    --host "kubernetes.default.svc.cluster.local" \
-    --request-path "/healthz"
-
-  gcloud compute firewall-rules create kubernetes-the-hard-way-allow-health-check \
-    --network kubernetes-the-hard-way \
-    --source-ranges 209.85.152.0/22,209.85.204.0/22,35.191.0.0/16 \
-    --allow tcp
-
-  gcloud compute target-pools create kubernetes-target-pool \
-    --http-health-check kubernetes
-
-  gcloud compute target-pools add-instances kubernetes-target-pool \
-   --instances controller-0,controller-1,controller-2
-
-  gcloud compute forwarding-rules create kubernetes-forwarding-rule \
-    --address ${KUBERNETES_PUBLIC_ADDRESS} \
-    --ports 6443 \
-    --region $(gcloud config get-value compute/region) \
-    --target-pool kubernetes-target-pool
-}
-```
-Verfification
-```
-KUBERNETES_PUBLIC_ADDRESS=$(gcloud compute addresses describe kubernetes-the-hard-way \
-  --region $(gcloud config get-value compute/region) \
-  --format 'value(address)')
-curl --cacert ca.pem https://${KUBERNETES_PUBLIC_ADDRESS}:6443/version
-```
-
-Bootstrapping the Kubernetes Worker Nodes
-on each worker instance: worker-0, worker-1, and worker-2
-```
-gcloud compute ssh worker-0
-{
-  sudo apt-get update
-  sudo apt-get -y install socat conntrack ipset
-}
-```
-```
-wget -q --show-progress --https-only --timestamping \
-  https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.12.0/crictl-v1.12.0-linux-amd64.tar.gz \
-  https://storage.googleapis.com/kubernetes-the-hard-way/runsc-50c283b9f56bb7200938d9e207355f05f79f0d17 \
-  https://github.com/opencontainers/runc/releases/download/v1.0.0-rc5/runc.amd64 \
-  https://github.com/containernetworking/plugins/releases/download/v0.6.0/cni-plugins-amd64-v0.6.0.tgz \
-  https://github.com/containerd/containerd/releases/download/v1.2.0-rc.0/containerd-1.2.0-rc.0.linux-amd64.tar.gz \
-  https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kubectl \
-  https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kube-proxy \
-  https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kubelet
-```
-```
-sudo mkdir -p \
-  /etc/cni/net.d \
-  /opt/cni/bin \
-  /var/lib/kubelet \
-  /var/lib/kube-proxy \
-  /var/lib/kubernetes \
-  /var/run/kubernetes
-{
-  sudo mv runsc-50c283b9f56bb7200938d9e207355f05f79f0d17 runsc
-  sudo mv runc.amd64 runc
-  chmod +x kubectl kube-proxy kubelet runc runsc
-  sudo mv kubectl kube-proxy kubelet runc runsc /usr/local/bin/
-  sudo tar -xvf crictl-v1.12.0-linux-amd64.tar.gz -C /usr/local/bin/
-  sudo tar -xvf cni-plugins-amd64-v0.6.0.tgz -C /opt/cni/bin/
-  sudo tar -xvf containerd-1.2.0-rc.0.linux-amd64.tar.gz -C /
-}
-```
-```
-POD_CIDR=$(curl -s -H "Metadata-Flavor: Google" \
-  http://metadata.google.internal/computeMetadata/v1/instance/attributes/pod-cidr)
-cat <<EOF | sudo tee /etc/cni/net.d/10-bridge.conf
-{
-    "cniVersion": "0.3.1",
-    "name": "bridge",
-    "type": "bridge",
-    "bridge": "cnio0",
-    "isGateway": true,
-    "ipMasq": true,
-    "ipam": {
-        "type": "host-local",
-        "ranges": [
-          [{"subnet": "${POD_CIDR}"}]
-        ],
-        "routes": [{"dst": "0.0.0.0/0"}]
-    }
-}
-EOF
-cat <<EOF | sudo tee /etc/cni/net.d/99-loopback.conf
-{
-    "cniVersion": "0.3.1",
-    "type": "loopback"
-}
-EOF
-```
-```
-sudo mkdir -p /etc/containerd/
-cat << EOF | sudo tee /etc/containerd/config.toml
-[plugins]
-  [plugins.cri.containerd]
-    snapshotter = "overlayfs"
-    [plugins.cri.containerd.default_runtime]
-      runtime_type = "io.containerd.runtime.v1.linux"
-      runtime_engine = "/usr/local/bin/runc"
-      runtime_root = ""
-    [plugins.cri.containerd.untrusted_workload_runtime]
-      runtime_type = "io.containerd.runtime.v1.linux"
-      runtime_engine = "/usr/local/bin/runsc"
-      runtime_root = "/run/containerd/runsc"
-    [plugins.cri.containerd.gvisor]
-      runtime_type = "io.containerd.runtime.v1.linux"
-      runtime_engine = "/usr/local/bin/runsc"
-      runtime_root = "/run/containerd/runsc"
-EOF
-cat <<EOF | sudo tee /etc/systemd/system/containerd.service
-[Unit]
-Description=containerd container runtime
-Documentation=https://containerd.io
-After=network.target
 
-[Service]
-ExecStartPre=/sbin/modprobe overlay
-ExecStart=/bin/containerd
-Restart=always
-RestartSec=5
-Delegate=yes
-KillMode=process
-OOMScoreAdjust=-999
-LimitNOFILE=1048576
-LimitNPROC=infinity
-LimitCORE=infinity
-
-[Install]
-WantedBy=multi-user.target
-EOF
+(Install kubectl)[https://kubernetes.io/docs/tasks/tools/install-kubectl/]
 ```
+sudo apt-get update && sudo apt-get install -y apt-transport-https
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee -a /etc/apt/sources.list.d/kubernetes.list
+sudo apt-get update
+sudo apt-get install -y kubectl
 ```
-{
-  sudo mv ${HOSTNAME}-key.pem ${HOSTNAME}.pem /var/lib/kubelet/
-  sudo mv ${HOSTNAME}.kubeconfig /var/lib/kubelet/kubeconfig
-  sudo mv ca.pem /var/lib/kubernetes/
-}
-cat <<EOF | sudo tee /var/lib/kubelet/kubelet-config.yaml
-kind: KubeletConfiguration
-apiVersion: kubelet.config.k8s.io/v1beta1
-authentication:
-  anonymous:
-    enabled: false
-  webhook:
-    enabled: true
-  x509:
-    clientCAFile: "/var/lib/kubernetes/ca.pem"
-authorization:
-  mode: Webhook
-clusterDomain: "cluster.local"
-clusterDNS:
-  - "10.32.0.10"
-podCIDR: "${POD_CIDR}"
-resolvConf: "/run/systemd/resolve/resolv.conf"
-runtimeRequestTimeout: "15m"
-tlsCertFile: "/var/lib/kubelet/${HOSTNAME}.pem"
-tlsPrivateKeyFile: "/var/lib/kubelet/${HOSTNAME}-key.pem"
-EOF
-cat <<EOF | sudo tee /etc/systemd/system/kubelet.service
-[Unit]
-Description=Kubernetes Kubelet
-Documentation=https://github.com/kubernetes/kubernetes
-After=containerd.service
-Requires=containerd.service
-
-[Service]
-ExecStart=/usr/local/bin/kubelet \\
-  --config=/var/lib/kubelet/kubelet-config.yaml \\
-  --container-runtime=remote \\
-  --container-runtime-endpoint=unix:///var/run/containerd/containerd.sock \\
-  --image-pull-progress-deadline=2m \\
-  --kubeconfig=/var/lib/kubelet/kubeconfig \\
-  --network-plugin=cni \\
-  --register-node=true \\
-  --v=2
-Restart=on-failure
-RestartSec=5
 
-[Install]
-WantedBy=multi-user.target
-EOF
+Install local hypervisor
 ```
+KVM or VirtualBox
 ```
-sudo mv kube-proxy.kubeconfig /var/lib/kube-proxy/kubeconfig
-cat <<EOF | sudo tee /var/lib/kube-proxy/kube-proxy-config.yaml
-kind: KubeProxyConfiguration
-apiVersion: kubeproxy.config.k8s.io/v1alpha1
-clientConnection:
-  kubeconfig: "/var/lib/kube-proxy/kubeconfig"
-mode: "iptables"
-clusterCIDR: "10.200.0.0/16"
-EOF
-```
-```
-cat <<EOF | sudo tee /etc/systemd/system/kube-proxy.service
-[Unit]
-Description=Kubernetes Kube Proxy
-Documentation=https://github.com/kubernetes/kubernetes
 
-[Service]
-ExecStart=/usr/local/bin/kube-proxy \\
-  --config=/var/lib/kube-proxy/kube-proxy-config.yaml
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-{
-  sudo systemctl daemon-reload
-  sudo systemctl enable containerd kubelet kube-proxy
-  sudo systemctl start containerd kubelet kube-proxy
-}
-```
-end of each
-Verfification
-```
-gcloud compute ssh controller-0 --command "kubectl get nodes --kubeconfig admin.kubeconfig"
+Install Minikube
 ```
-
-Configuring kubectl for Remote Access
+curl -Lo minikube https://storage.googleapis.com/minikube/releases/v0.34.1/minikube-linux-amd64 \
+  && chmod +x minikube && sudo mv minikube /usr/local/bin/
 ```
-{
-  KUBERNETES_PUBLIC_ADDRESS=$(gcloud compute addresses describe kubernetes-the-hard-way \
-    --region $(gcloud config get-value compute/region) \
-    --format 'value(address)')
-
-  kubectl config set-cluster kubernetes-the-hard-way \
-    --certificate-authority=ca.pem \
-    --embed-certs=true \
-    --server=https://${KUBERNETES_PUBLIC_ADDRESS}:6443
 
-  kubectl config set-credentials admin \
-    --client-certificate=admin.pem \
-    --client-key=admin-key.pem
-
-  kubectl config set-context kubernetes-the-hard-way \
-    --cluster=kubernetes-the-hard-way \
-    --user=admin
-
-  kubectl config use-context kubernetes-the-hard-way
-}
-```
-Verfification
+Start minicube
 ```
-kubectl get componentstatuses
+minikube start --kubernetes-version <version> --vm-driver=<hypervisor>
 kubectl get nodes
 ```
 
-Provisioning Pod Network Routes
+Usual kubectl config order
 ```
-for instance in worker-0 worker-1 worker-2; do
-  gcloud compute instances describe ${instance} \
-    --format 'value[separator=" "](networkInterfaces[0].networkIP,metadata.items[0].value)'
-done
-```
-```
-for i in 0 1 2; do
-  gcloud compute routes create kubernetes-route-10-200-${i}-0-24 \
-    --network kubernetes-the-hard-way \
-    --next-hop-address 10.240.0.2${i} \
-    --destination-range 10.200.${i}.0/24
-done
-```
-```
-gcloud compute routes list --filter "network: kubernetes-the-hard-way"
+kubectl config set-cluster ... cluster_name
+kubectl config set-credentials ... user_name
+kubectl config set-context context_name \
+--cluster=cluster_name \
+--user=user_name
+kubectl config use-context context_name
 ```
 
-Deploying the DNS Cluster Add-on
+Contexts
 ```
-kubectl apply -f https://storage.googleapis.com/kubernetes-the-hard-way/coredns.yaml
-kubectl get pods -l k8s-app=kube-dns -n kube-system
-```
-Verification
-```
-kubectl run busybox --image=busybox:1.28 --command -- sleep 3600
-kubectl get pods -l run=busybox
-POD_NAME=$(kubectl get pods -l run=busybox -o jsonpath="{.items[0].metadata.name}")
-kubectl exec -ti $POD_NAME -- nslookup kubernetes
+kubectl config current-context
+kubectl config get-contexts
 ```
 
-Smoke Test
+ui-deployment.yml
 ```
-kubectl create secret generic kubernetes-the-hard-way \
-  --from-literal="mykey=mydata"
-gcloud compute ssh controller-0 \
-  --command "sudo ETCDCTL_API=3 etcdctl get \
-  --endpoints=https://127.0.0.1:2379 \
-  --cacert=/etc/etcd/ca.pem \
-  --cert=/etc/etcd/kubernetes.pem \
-  --key=/etc/etcd/kubernetes-key.pem\
-  /registry/secrets/default/kubernetes-the-hard-way | hexdump -C"
-```
-
-Deployments
-```
-kubectl run nginx --image=nginx
-kubectl get pods -l run=nginx
-```
-
-Port Forwarding
-```
-POD_NAME=$(kubectl get pods -l run=nginx -o jsonpath="{.items[0].metadata.name}")
-kubectl port-forward $POD_NAME 8080:80
-curl --head http://127.0.0.1:8080
-```
-
-Logs
-```
-kubectl logs $POD_NAME
-```
-
-Exec
-```
-kubectl exec -ti $POD_NAME -- nginx -v
-```
-
-Services
-```
-kubectl expose deployment nginx --port 80 --type NodePort
-NODE_PORT=$(kubectl get svc nginx \
-  --output=jsonpath='{range .spec.ports[0]}{.nodePort}')
-gcloud compute firewall-rules create kubernetes-the-hard-way-allow-nginx-service \
-  --allow=tcp:${NODE_PORT} \
-  --network kubernetes-the-hard-way
-EXTERNAL_IP=$(gcloud compute instances describe worker-0 \
-  --format 'value(networkInterfaces[0].accessConfigs[0].natIP)')
-curl -I http://${EXTERNAL_IP}:${NODE_PORT}
-```
-
-Untrusted Workloads
-```
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
+---
+apiVersion: apps/v1beta2
+kind: Deployment
 metadata:
-  name: untrusted
-  annotations:
-    io.kubernetes.cri.untrusted-workload: "true"
+  name: ui
+  labels:
+    app: reddit
+    component: ui
 spec:
-  containers:
-    - name: webserver
-      image: gcr.io/hightowerlabs/helloworld:2.0.0
-EOF
+  replicas: 3
+  selector:
+    matchLabels:
+      app: reddit
+      component: ui
+  template:
+    metadata:
+      name: ui-pod
+      labels:
+        app: reddit
+        component: ui
+    spec:
+      containers:
+      - image: rimskiy/ui
+        name: ui
 ```
 
-Verification
+Run deployment
 ```
-kubectl get pods -o wide
-INSTANCE_NAME=$(kubectl get pod untrusted --output=jsonpath='{.spec.nodeName}')
-gcloud compute ssh ${INSTANCE_NAME}
-sudo runsc --root  /run/containerd/runsc/k8s.io list
+kubectl apply -f ui-deployment.yml
+or
+kubectl apply -f ./kubernetes/<directory>
+ubectl get deployment
+```
+Forward ports
+```
+kubectl get pods --selector component=ui
+kubectl port-forward <pod-name> 8080:9292 ### 8080 ext - 9292 int
 ```
 
-Cleaning Up
+comment-deployment.yml
 ```
-gcloud -q compute instances delete \
-  controller-0 controller-1 controller-2 \
-  worker-0 worker-1 worker-2
-{
-  gcloud -q compute forwarding-rules delete kubernetes-forwarding-rule \
-    --region $(gcloud config get-value compute/region)
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: comment
+  labels:
+    app: reddit
+    component: comment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: reddit
+      component: comment
+  template:
+    metadata:
+      name: comment
+      labels:
+        app: reddit
+        component: comment
+    spec:
+      containers:
+      - image: rimskiy/comment
+        name: comment
+```
+Forward ports
+```
+kubectl get pods --selector component=comment
+kubectl port-forward <pod-name> 9292:9292
+```
 
-  gcloud -q compute target-pools delete kubernetes-target-pool
+post-deployment.yml
+```
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: post
+  labels:
+    app: reddit
+    component: post
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: reddit
+      component: post
+  template:
+    metadata:
+      name: post
+      labels:
+        app: reddit
+        component: post
+    spec:
+      containers:
+      - image: rimskiy/post
+        name: post
+```
+Forward ports
+```
+kubectl get pods --selector component=comment
+kubectl port-forward <pod-name> 5000:5000
+```
 
-  gcloud -q compute http-health-checks delete kubernetes
+comment-service.yml
+```
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: comment # DNS record
+  labels:
+    app: reddit
+    component: comment
+spec:
+  ports:
+  - port: 9292 # request to comment:9292 from POD internally
+    protocol: TCP
+    targetPort: 9292 # redirects to 9292
+  selector: # select POD
+    app: reddit
+    component: comment
+```
 
-  gcloud -q compute addresses delete kubernetes-the-hard-way
-}
-gcloud -q compute firewall-rules delete \
-  kubernetes-the-hard-way-allow-nginx-service \
-  kubernetes-the-hard-way-allow-internal \
-  kubernetes-the-hard-way-allow-external \
-  kubernetes-the-hard-way-allow-health-check
-{
-  gcloud -q compute routes delete \
-    kubernetes-route-10-200-0-0-24 \
-    kubernetes-route-10-200-1-0-24 \
-    kubernetes-route-10-200-2-0-24
+```
+kubectl describe service comment | grep Endpoints
+sudo apt-get install dnsutils
+kubectl exec -ti <pod-name> nslookup comment
+```
 
-  gcloud -q compute networks subnets delete kubernetes
+post-service.yml
+```
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: post
+  labels:
+    app: reddit
+    component: post
+spec:
+  ports:
+  - port: 5000
+    protocol: TCP
+    targetPort: 5000
+  selector:
+    app: reddit
+    component: post
+```
 
-  gcloud -q compute networks delete kubernetes-the-hard-way
-}
+mongodb-service.yml
+```
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  labels:
+    app: reddit
+    component: mongo
+spec:
+  ports:
+  - port: 27017
+    protocol: TCP
+    targetPort: 27017
+  selector:
+    app: reddit
+    component: mongo
+```
+```
+sudo docker run -d -p 4000:5000 --restart=always --name myregistry registry:2
+docker tag 06c354345a09 localhost:4000/rimskiy/ui
+docker push localhost:5000/rimskiy/ui
+docker pull localhost:5000/rimskiy/ui
+```
+```
+minikube start --memory 4096 --insecure-registry=localhost:4000
+eval $(minikube docker-env)
+docker pull rimskiy/ui
+kubectl apply -f mongo-deployment.yml
+kubectl apply -f mongodb-service.yml
+kubectl apply -f comment-deployment.yml
+kubectl apply -f comment-service.yml
+kubectl apply -f ui-deployment.yml
+kubectl apply -f ui-service.yml
+kubectl port-forward ui-7ccfddd67c-97fp4 9292:9292
+kubectl logs post-854b778cd9-cxntp
+```
+userful commands
+```
+kubectl get pods --selector component=ui
+kubectl describe pod comment-8468c88dd7-dtwvg
+kubectl delete pods ui-7ccfddd67c-457kv
+kubectl get pod,svc -n kube-system
+kubectl delete service hello-node
+kubectl delete deployment hello-node
+```
+minikube docker
+```
+eval $(minikube docker-env)
+eval $(minikube docker-env --unset)
+```
+
+ClusterIP - only inside cluster
+NodePort - on node opens port in range 30000-32767 and redirects from NodeIP:NodePort to targetPort
+```
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui
+  labels:
+    app: reddit
+    component: ui
+spec:
+  type: NodePort
+  ports:  
+  - nodePort: 32092
+    port: 9292
+    protocol: TCP
+    targetPort: 9292
+  selector:
+    app: reddit
+    component: ui
+```
+
+```
+minikube service ui
+minikube service list
+```
+
+Addons
+```
+minikube addons list
+minikube addons enable dashboard
+kubectl get pods
+kubectl get all -n kube-system --selector k8s-app=kubernetes-dashboard
+minikube service kubernetes-dashboard -n kube-system
+minikube dashboard
+kubectl create -f https://raw.githubusercontent.com/kubernetes/dashboard/master/aio/deploy/recommended/kubernetes-dashboard.yaml
+kubectl proxy
+```
+
+Create dev namespace
+```
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+```
+```
+kubectl apply -f dev-namespace.yml
+kubectl apply -n dev -f .
+minikube service ui -n dev
+```
+
+Add information about environment in container
+ui-deployment.yml
+```
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: ui
+  labels:
+    app: reddit
+    component: ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: reddit
+      component: ui
+  template:
+    metadata:
+      name: ui-pod
+      labels:
+        app: reddit
+        component: ui
+    spec:
+      containers:
+      - image: rimskiy/ui
+        name: ui
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: ENV
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+```
+```
+kubectl apply -f ui-deployment.yml -n dev
+```
+
+GKE
+```
+gcloud container clusters get-credentials your-first-cluster-1 --zone europe-west4-a --project docker-225016
+kubectl config current-context
+kubectl apply -f dev-namespace.yml
+kubectl apply -f . -n dev
+```
+Add firewall rule in GCP
+```
+kubectl get nodes -o wide
+kubectl describe service ui -n dev | grep NodePort
+```
+
+Run dashboard
+```
+kubectl create clusterrolebinding kubernetes-dashboard  --clusterrole=cluster-admin --serviceaccount=kube-system:kubernetes-dashboard
+kubectl proxy
+http://localhost:8001/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/#!/overview?namespace=dev
 ```
