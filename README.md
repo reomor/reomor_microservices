@@ -2006,8 +2006,9 @@ docker-compose -f docker-compose-logging.yml up -d fluentd
 
 ### description
 
-(Hard way install Kubernetes)[https://github.com/kelseyhightower/kubernetes-the-hard-way/]
-(One file copy)[kubernetes/README.md]
+[Hard way install Kubernetes](https://github.com/kelseyhightower/kubernetes-the-hard-way/)
+
+[One file copy](kubernetes/README.md)
 
 ## HW22
 
@@ -2016,7 +2017,7 @@ docker-compose -f docker-compose-logging.yml up -d fluentd
 ### description
 
 
-(Install kubectl)[https://kubernetes.io/docs/tasks/tools/install-kubectl/]
+[Install kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 ```
 sudo apt-get update && sudo apt-get install -y apt-transport-https
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
